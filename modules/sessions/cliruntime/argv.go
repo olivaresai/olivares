@@ -44,7 +44,7 @@ func ClaudeArgs(req LaunchRequest) []string {
 		"--input-format", "stream-json",
 		"--output-format", "stream-json",
 		"--verbose", "--print",
-		"--replay-user-messages",
+		"--replay-user-messages", "--include-partial-messages",
 	}
 	return append(args, claudeGovernedTail(req)...)
 }

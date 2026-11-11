@@ -84,6 +84,7 @@
     "notReady": "{{tool}} cannot start yet.",
     "folder": "Folder",
     "folderHint": "A folder on this server.",
+    "folderHintGiven": "The path of a folder already registered on this server. An administrator registers new ones.",
     "folderChoose": "Choose a folder",
     "folderNew": "A new folder for this session",
     "folderTyped": "Another folder…",
@@ -111,6 +112,7 @@
     "credentialsManage": "Manage managed credentials",
     "listUnavailable": "The engine did not answer the secrets list. Nothing can be chosen for now.",
     "openTools": "Open AI tools",
+    "askAdmin": "Ask an administrator to get it ready.",
     "model": "Model",
     "providerDefault": "Default ({{model}})",
     "nativeDefault": "{{tool}} default",
@@ -123,14 +125,21 @@
     "profileNeedsKey": "Needs a key",
     "foldersUnreadable": "The registered folders could not be read. Type the path of a folder on this server.",
     "folderPermission": "Starts as {{name}}, this folder's default.",
-    "autoAsks": "{{tool}} has no automatic mode: it will ask before each action."
+    "autoAsks": "{{tool}} has no automatic mode: it will ask before each action.",
+    "worktreeCheckout": "Current checkout",
+    "worktreeNew": "New worktree",
+    "worktreeFrom": "Start from",
+    "worktreeFromHint": "Branch or commit (optional)",
+    "worktreeNewHint": "The session works on a branch of its own in a separate folder. Your checkout stays as it is.",
+    "worktreeLegend": "Working copy"
   },
   "composer": {
     "toolPill": "Tool and account: {{value}}",
     "modelPill": "Model: {{value}}",
     "effortPill": "Effort: {{value}}",
     "folderPill": "Folder: {{value}}",
-    "moreOptions": "More options"
+    "moreOptions": "More options",
+    "worktreePill": "Working copy: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Registered folders: {{count}} loaded; there are more.",

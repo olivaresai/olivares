@@ -74,6 +74,10 @@ test('first use: setup, choose model and folder, work, change model, stop', asyn
   await expect(
     start.getByRole('heading', { name: 'Start a session', exact: true }),
   ).toBeVisible()
+  // First run is one screen with one next step: no empty state beside the composer, and
+  // no second instruction to get a tool ready (the tool here is signed in on the server).
+  await expect(page.getByText('No sessions yet')).toHaveCount(0)
+  await expect(page.getByTestId('tool-claude')).toHaveCount(0)
   const headers = {
     Authorization: `Bearer ${await sessionToken(page)}`,
     'X-Olivares-Tenant': await consoleTenant(page),
@@ -203,8 +207,11 @@ test('first use: setup, choose model and folder, work, change model, stop', asyn
   await expect(details.getByTestId('session-pane-body')).toContainText(
     'first-use file contents',
   )
-  await panel('Terminal')
-  await page.getByRole('button', { name: 'Open terminal', exact: true }).click()
+  // The terminal is the drawer under the conversation; opening it starts a shell.
+  await page
+    .getByTestId('terminal-drawer')
+    .getByRole('button', { name: 'Terminal', exact: true })
+    .click()
   const terminal = page.getByTestId('terminal-screen')
   await expect(terminal).toContainText('$', { timeout: 30_000 })
   await page.locator('.xterm-helper-textarea').focus()
@@ -217,6 +224,10 @@ test('first use: setup, choose model and folder, work, change model, stop', asyn
     })
     .toContain(`first-use-pwd=${folder}`)
   await page
+    .getByRole('button', { name: 'Close Terminal 1', exact: true })
+    .click()
+  await page
+    .getByRole('dialog', { name: 'Close Terminal 1?', exact: true })
     .getByRole('button', { name: 'Close terminal', exact: true })
     .click()
 
@@ -228,7 +239,7 @@ test('first use: setup, choose model and folder, work, change model, stop', asyn
   await expect(page.getByText(/This session keeps/)).toBeVisible()
   await expect(page.getByTestId('composer-new-with-choice')).toBeVisible()
   await page.keyboard.press('Escape')
-  await page.locator('[data-slot="sidebar"] a[href="/sessions"]').click()
+  await page.locator('[data-slot="sidebar"] a[data-place="sessions"]').click()
   await openWorkingFold(page)
   const listed = page
     .getByTestId('rail-row')

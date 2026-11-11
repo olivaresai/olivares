@@ -72,7 +72,13 @@
     "editorSsh": "Host SSH del editor",
     "editorSshHint": "Cómo llega el editor a las carpetas de sesión de otra máquina, como usuario@host o usuario@host:puerto. Vacío: la dirección desde la que se sirve esta consola; sin SSH si es este equipo.",
     "reduceMotion": "Reducir movimiento",
-    "reduceMotionHint": "Sustituye el movimiento por fundidos. Activo cuando el sistema lo pide."
+    "reduceMotionHint": "Sustituye el movimiento por fundidos. Activo cuando el sistema lo pide.",
+    "sendKey": "Tecla de envío",
+    "sendKeyHint": "La tecla que envía el mensaje en una sesión. Con la segunda opción, Entrar hace un salto de línea.",
+    "sendWhileRunning": "Mientras la herramienta trabaja",
+    "sendWhileRunningHint": "Qué hace la tecla de envío mientras un turno está en marcha. Si Entrar envía, Ctrl+Entrar hace lo otro.",
+    "sendQueue": "Ponerlo en cola",
+    "sendSteer": "Redirigir el turno"
   },
   "sessionNotifications": {
     "title": "Notificaciones de sesiones",
@@ -93,14 +99,14 @@
     "scope": "Las teclas que responde esta instalación. Son las mismas para todos."
   },
   "edition": {
-    "scope": "La edición de esta compilación, su licencia y lo que añade Business.",
+    "scope": "La edición de esta compilación, su licencia y lo que añade Olivares AI Business.",
     "label": "Edición",
     "unknown": "Este motor no la indica",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business añade",
+    "businessAdds": "Olivares AI Business añade",
     "summary": {
       "Session cockpit and fleet deployment.": "Cabina de sesiones y despliegue en flota.",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Compartición de sesiones en directo con acceso de invitados nominativo y con caducidad, y propuestas de mensajes que aprueba el propietario.",
@@ -111,11 +117,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise incluye todo lo de Business, más los términos acordados en un contrato y las capacidades que dependen de ellos."
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "Edición {{edition}}",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "Mostrar la insignia de edición",
       "loadError": "No se ha podido cargar la preferencia de la insignia.",
       "saveError": "No se ha podido guardar la preferencia de la insignia. Inténtalo de nuevo."
@@ -317,7 +325,7 @@
     "inactive": "Las trazas están desactivadas.",
     "apply": "Aplicar",
     "saved": "Configuración de trazas guardada.",
-    "businessRequired": "El envío SIEM y la exportación externa de telemetría requieren Business. Se conservan los ajustes; Community no envía los datos."
+    "businessRequired": "El envío SIEM y la exportación externa de telemetría requieren Olivares AI Business. Se conservan los ajustes; Olivares AI Community no envía los datos."
   },
   "signIn": {
     "methods": "Métodos de acceso",

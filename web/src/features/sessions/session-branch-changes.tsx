@@ -8,13 +8,20 @@
 // view. It is what a person reviews after opening the work a handoff names. Committed
 // work only: uncommitted edits are what session-changes.tsx shows. The engine reads git's
 // objects and runs nothing in the session's folder (modules/sessions/run_worktree_diff.go).
+// A session with no worktree of its own works in its Git folder directly: the same view
+// shows that folder's uncommitted changes against its last commit
+// (modules/sessions/run_folder_diff.go).
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { useId, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { FileTypeIcon } from '@/components/ui/file-type-icon'
+import { DiffDialog } from '@/components/ui/diff-dialog'
+import { OpenInEditor } from '@/features/shared/open-in-editor'
+import { firstChangedLine } from '@/lib/editor-links'
 import { CodeDiff } from '@/components/ui/code-diff'
 import { Input } from '@/components/ui/input'
 import { PathText } from '@/components/ui/path-text'
@@ -26,6 +33,8 @@ import type { RunDTO } from '@/features/agentops/types'
 import { currentControlFence } from '@/features/agentops/work-fence'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import { cn } from '@/lib/utils'
+import { useReviewed } from '@/stores/preferences'
 import { isLiveRun } from './provenance'
 import { reviewCommentText } from './review-comment'
 import './i18n'
@@ -36,7 +45,7 @@ const WORKING_REFRESH_MS = 5_000
 const SHORT_ID = 12
 
 /** The line a comment is about: the version it is in, and its number as typed. */
-interface CommentPlace {
+export interface CommentPlace {
   side: 'original' | 'modified'
   line: string
 }
@@ -61,10 +70,24 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
     setPlace(NO_PLACE)
   }
   const working = run.state === 'running' || run.state === 'idle'
+  // A session with no worktree of its own works in its Git folder: the engine compares
+  // the folder as it is now with its last commit, and the view says so in those words.
+  const folder = !run.worktree_branch
+  const sides = folder
+    ? {
+        original: t('branchChanges.folder.original'),
+        modified: t('branchChanges.folder.modified'),
+      }
+    : undefined
+  // A Git folder with no commit yet answers 409: there is nothing to compare with, and
+  // nothing to poll for until a commit, which reads the list again (session-git.tsx).
+  const noCommitYet = (error: unknown) =>
+    folder && error instanceof ApiError && error.status === 409
   const diff = useQuery({
     queryKey: agentOpsKeys.runWorktreeDiff(activeTenant, run.run_ref),
     queryFn: ({ signal }) => agentOpsApi.worktreeDiff(run.run_ref, { signal }),
-    refetchInterval: working ? WORKING_REFRESH_MS : false,
+    refetchInterval: (query) =>
+      working && !noCommitYet(query.state.error) ? WORKING_REFRESH_MS : false,
   })
   const file = useQuery({
     queryKey: agentOpsKeys.runWorktreeDiffFile(activeTenant, run.run_ref, open),
@@ -75,6 +98,33 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
     refetchInterval: working ? WORKING_REFRESH_MS : false,
   })
   const data = diff.data
+  // Said plainly, not as a failure.
+  const noCommit = noCommitYet(diff.error)
+  // A branch name renders through PathText, as every path and branch does: cut in the
+  // middle when long, whole on hover, copied whole.
+  const sinceBranch = data?.branch ? (
+    <Trans
+      t={t}
+      i18nKey="branchChanges.folder.since"
+      components={{ branch: <PathText value={data.branch} /> }}
+    />
+  ) : null
+  const compared = !data
+    ? null
+    : !folder
+      ? t('branchChanges.range', {
+          base: data.base.slice(0, SHORT_ID),
+          head: data.head.slice(0, SHORT_ID),
+        })
+      : data.branch
+        ? sinceBranch
+        : t('branchChanges.folder.sinceCommit', {
+            base: data.base.slice(0, SHORT_ID),
+          })
+  const [reviewed, setReviewed] = useReviewed(
+    `${run.run_ref}:branch:${open}`,
+    JSON.stringify(file.data ?? null),
+  )
 
   return (
     <section
@@ -83,25 +133,27 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
     >
       <div>
         <h3 className="text-caption font-medium text-foreground">
-          {t('branchChanges.title')}
+          {folder ? t('branchChanges.folder.title') : t('branchChanges.title')}
         </h3>
-        <p className="text-caption text-muted-foreground">
-          {t('branchChanges.hint')}
-        </p>
-        {data ? (
+        {folder ? null : (
+          <p className="text-caption text-muted-foreground">
+            {t('branchChanges.hint')}
+          </p>
+        )}
+        {compared ? (
           <p
             data-testid="branch-changes-range"
-            className="break-all font-mono text-caption text-muted-foreground"
+            className={cn(
+              'text-caption text-muted-foreground',
+              folder ? 'break-words' : 'break-all font-mono',
+            )}
           >
-            {t('branchChanges.range', {
-              base: data.base.slice(0, SHORT_ID),
-              head: data.head.slice(0, SHORT_ID),
-            })}
+            {compared}
           </p>
         ) : null}
       </div>
       {open !== null ? (
-        <div className="flex min-w-0 flex-col gap-2">
+        <DiffDialog title={open} onClose={() => openFile(null)}>
           <Button
             variant="ghost"
             size="sm"
@@ -109,9 +161,16 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
             onClick={() => openFile(null)}
           >
             <ArrowLeft className="size-3.5" />
-            {t('branchChanges.back')}
+            {folder ? t('changes.back') : t('branchChanges.back')}
           </Button>
           <PathText value={open} wrap />
+          {run.workspace_path && file.data && !file.data.binary ? (
+            <OpenInEditor
+              root={run.workspace_path}
+              file={open}
+              line={firstChangedLine(file.data.original, file.data.modified)}
+            />
+          ) : null}
           {file.isPending ? (
             <p className="text-caption text-muted-foreground">
               {t('branchChanges.loading')}
@@ -126,19 +185,28 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
             </p>
           ) : (
             <>
+              <label className="flex items-center gap-2 text-caption">
+                <Checkbox
+                  checked={reviewed}
+                  onCheckedChange={(checked) => setReviewed(checked === true)}
+                />
+                {t('shared:diff.reviewed')}
+              </label>
               <CodeDiff
                 original={file.data.original}
                 modified={file.data.modified}
                 language="text"
-                originalLabel={t('branchChanges.original')}
-                modifiedLabel={t('branchChanges.modified')}
+                originalLabel={sides?.original ?? t('branchChanges.original')}
+                modifiedLabel={sides?.modified ?? t('branchChanges.modified')}
                 onLineClick={(side, line) =>
                   setPlace({ side, line: String(line) })
                 }
               />
               {file.data.truncated ? (
                 <p className="text-caption text-muted-foreground">
-                  {t('branchChanges.fileTruncated')}
+                  {folder
+                    ? t('branchChanges.folder.fileTruncated')
+                    : t('branchChanges.fileTruncated')}
                 </p>
               ) : null}
               <LineCommentForm
@@ -148,22 +216,34 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
                 modified={file.data.modified}
                 place={place}
                 onPlace={setPlace}
+                comparison={sides}
               />
             </>
           )}
-        </div>
-      ) : diff.isPending ? (
+        </DiffDialog>
+      ) : null}
+      {diff.isPending ? (
         <p className="text-caption text-muted-foreground">
-          {t('branchChanges.loading')}
+          {folder ? t('changes.loading') : t('branchChanges.loading')}
+        </p>
+      ) : noCommit ? (
+        <p className="text-caption text-muted-foreground">
+          {t('branchChanges.folder.noCommit')}
         </p>
       ) : diff.isError ? (
-        <p className="text-caption text-danger">{t('branchChanges.error')}</p>
+        <p className="text-caption text-danger">
+          {folder ? t('changes.error') : t('branchChanges.error')}
+        </p>
       ) : data!.files.length === 0 ? (
         <p className="text-caption text-muted-foreground">
-          {t('branchChanges.empty')}
+          {folder ? t('branchChanges.folder.empty') : t('branchChanges.empty')}
         </p>
       ) : (
-        <ul className="flex flex-col" data-testid="branch-changes-list">
+        <ul
+          hidden={open !== null}
+          className="flex flex-col"
+          data-testid="branch-changes-list"
+        >
           {data!.files.map((f) => (
             <li key={f.path}>
               <button
@@ -176,6 +256,7 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
                   className="size-3.5 shrink-0 text-muted-foreground"
                 />
                 <PathText value={f.path} copy={false} className="flex-1" />
+                <LineCounts file={f} />
                 <Badge variant="neutral">
                   {t(`branchChanges.status.${f.status}`)}
                 </Badge>
@@ -193,25 +274,44 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
   )
 }
 
+/** The lines a changed file gained and lost, as `+N −M`; nothing when not counted. */
+export function LineCounts({
+  file,
+}: {
+  file: { added?: number; removed?: number }
+}) {
+  if (file.added === undefined && file.removed === undefined) return null
+  return (
+    <span className="flex shrink-0 gap-1 text-caption tabular-nums">
+      {file.added ? <span className="text-success">+{file.added}</span> : null}
+      {file.removed ? (
+        <span className="text-danger">−{file.removed}</span>
+      ) : null}
+    </span>
+  )
+}
+
 /**
  * Sends a comment on one line of the open file back to the session as its next message:
  * the run's input route, with the place beside it so the ledger records it. A disabled
  * Send says why (the session is not running, no line is chosen, the file has no such
  * line, nothing is written). A refused send keeps what was typed.
  */
-function LineCommentForm({
+export function LineCommentForm({
   run,
   path,
   original,
   modified,
   place,
   onPlace,
+  comparison,
 }: {
   run: RunDTO
   path: string
   original: string
   modified: string
   place: CommentPlace
+  comparison?: { original: string; modified: string }
   onPlace: (place: CommentPlace) => void
 }) {
   const { t } = useTranslation('sessions')
@@ -226,11 +326,13 @@ function LineCommentForm({
   const lineText = validLine
     ? linesOf(place.side === 'original' ? original : modified)[line - 1]
     : undefined
-  const version = t(
-    place.side === 'original'
-      ? 'branchChanges.comment.atBase'
-      : 'branchChanges.comment.atTip',
-  )
+  const version =
+    comparison?.[place.side] ??
+    t(
+      place.side === 'original'
+        ? 'branchChanges.comment.atBase'
+        : 'branchChanges.comment.atTip',
+    )
   const reason = !can('sessions:run:write')
     ? t('branchChanges.comment.noPermission')
     : !isLiveRun(run)
@@ -248,7 +350,12 @@ function LineCommentForm({
       const where = { path, line, side: place.side }
       const body = sessionTurnBody(
         run,
-        reviewCommentText(where, lineText ?? '', comment),
+        reviewCommentText(
+          where,
+          lineText ?? '',
+          comment,
+          comparison?.[place.side],
+        ),
       )
       return agentOpsApi.reviewComment(
         run.run_ref,
@@ -317,8 +424,12 @@ function LineCommentForm({
             }
             className="h-9 rounded-md border border-ctl-border bg-surface px-2 text-caption text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="modified">{t('branchChanges.modified')}</option>
-            <option value="original">{t('branchChanges.original')}</option>
+            <option value="modified">
+              {comparison?.modified ?? t('branchChanges.modified')}
+            </option>
+            <option value="original">
+              {comparison?.original ?? t('branchChanges.original')}
+            </option>
           </select>
         </div>
       </div>

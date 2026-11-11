@@ -72,7 +72,13 @@
     "editorSsh": "SSH host for the editor",
     "editorSshHint": "How the editor reaches session folders on another machine, as user@host or user@host:port. Empty uses the address this console is served from, and no SSH when that is this computer.",
     "reduceMotion": "Reduce motion",
-    "reduceMotionHint": "Replace movement with fades. On when your system asks for it."
+    "reduceMotionHint": "Replace movement with fades. On when your system asks for it.",
+    "sendKey": "Send key",
+    "sendKeyHint": "The key that sends your message in a session. With the second choice, Enter breaks a line.",
+    "sendWhileRunning": "While the tool works",
+    "sendWhileRunningHint": "What the send key does while a turn is running. When Enter sends, Ctrl+Enter does the other.",
+    "sendQueue": "Queue it",
+    "sendSteer": "Steer the turn"
   },
   "sessionNotifications": {
     "title": "Session notifications",
@@ -93,14 +99,14 @@
     "scope": "The keys this installation answers. They are the same for everyone."
   },
   "edition": {
-    "scope": "The edition of this build, its license, and what Business adds.",
+    "scope": "The edition of this build, its license, and what Olivares AI Business adds.",
     "label": "Edition",
     "unknown": "Not reported by this engine",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business adds",
+    "businessAdds": "Olivares AI Business adds",
     "summary": {
       "Session cockpit and fleet deployment.": "Session cockpit and fleet deployment.",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Live session sharing with named, expiring guest access and owner-approved message proposals.",
@@ -111,11 +117,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them."
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "{{edition}} edition",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "Show edition badge",
       "loadError": "Could not load the badge preference.",
       "saveError": "Could not save the badge preference. Try again."
@@ -314,7 +322,7 @@
     "inactive": "Tracing is off.",
     "apply": "Apply",
     "saved": "Tracing settings saved.",
-    "businessRequired": "SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them."
+    "businessRequired": "SIEM delivery and external telemetry export require Olivares AI Business. Stored settings are preserved; Olivares AI Community does not send them."
   },
   "signIn": {
     "methods": "Sign-in methods",

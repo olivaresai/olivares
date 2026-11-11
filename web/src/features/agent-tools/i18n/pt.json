@@ -158,7 +158,11 @@
     "default": "Início de sessão predefinido",
     "readFailed": "Não foi possível ler os perfis.",
     "truncated": "Alguns perfis não são apresentados.",
-    "retry": "Tentar novamente"
+    "retry": "Tentar novamente",
+    "turnOff": "Desligar {{name}}",
+    "turnOn": "Ligar {{name}}",
+    "switchedOn": "{{name}} está ligado",
+    "switchedOff": "{{name}} está desligado"
   },
   "tool": {
     "menu": "Opções de {{name}}",
@@ -260,5 +264,30 @@
     "accounts": "Contas",
     "allAccounts": "Todas as contas: detalhes, etiquetas e associações",
     "noAccess": "A sua função não pode ler as contas nem as chaves de API desta organização."
+  },
+  "runtime": {
+    "title": "Execução",
+    "autoCompact": "Compactar automaticamente após",
+    "autoCompactHint": "Compacta após 100.000 a 1.000.000 de tokens. Deixe vazio para usar o padrão do Claude.",
+    "autoCompactPlaceholder": "ex.: 300000",
+    "autoCompactInvalid": "Digite um número inteiro de 100000 a 1000000 ou deixe vazio.",
+    "saved": "Execução salva. As novas sessões a usam."
+  },
+  "models": {
+    "title": "Modelos",
+    "note": "Só você vê esta lista. Um modelo oculto sai dos seletores; o padrão da ferramenta e um modelo que você digitar continuam funcionando.",
+    "filter": "Filtrar modelos",
+    "disableAll": "Ocultar todos",
+    "enableAll": "Mostrar todos",
+    "addCustom": "Adicionar modelo personalizado",
+    "customPlaceholder": "ID do modelo, ex.: claude-opus-5-5",
+    "customInvalid": "Um ID de modelo não tem espaços e tem no máximo 200 caracteres.",
+    "add": "Adicionar",
+    "fast": "Modo rápido",
+    "up": "Mover {{name}} para cima",
+    "down": "Mover {{name}} para baixo",
+    "use": "Mostrar {{name}}",
+    "removeCustom": "Remover {{name}}",
+    "empty": "Esta ferramenta não informa modelos. Adicione os que você usa."
   }
 }

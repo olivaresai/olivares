@@ -156,7 +156,8 @@
     "statuses": {
       "active": "활성",
       "inactive": "비활성",
-      "error": "오류"
+      "error": "오류",
+      "suspended": "정지됨"
     },
     "roles": {
       "viewer": "뷰어",
@@ -172,7 +173,25 @@
     "endSessionsFor": "{{email}}의 로그인을 종료할까요?",
     "endSessionsBody": "{{email}}의 모든 활성 로그인이 이 조직에서 더 이상 작동하지 않습니다. 다른 조직에 대한 로그인, API 토큰, 계정은 변경되지 않습니다.",
     "sessionsEnded": "이 조직에 대한 접근이 종료되었습니다",
-    "totpResetDone": "TOTP 요소가 초기화되었습니다."
+    "totpResetDone": "TOTP 요소가 초기화되었습니다.",
+    "search": "사람 검색",
+    "filterLabel": "상태로 필터링",
+    "filterAll": "모든 상태",
+    "noMatch": "일치하는 사람이 없습니다",
+    "noMatchHint": "검색어나 상태 필터를 바꿔 보세요.",
+    "bulkLabel": "선택한 사람에 대한 작업",
+    "selected": "선택됨: {{n}}",
+    "selectAll": "표시된 모든 사람 선택",
+    "selectRow": "{{email}} 선택",
+    "suspend": "정지",
+    "reactivate": "재개",
+    "suspendTitle": "접근 정지",
+    "suspendBody": "{{email}}은(는) 이 조직에 즉시 로그인할 수 없고 API 토큰도 사용할 수 없습니다. 역할과 그룹은 유지되며 언제든 재개할 수 있습니다.",
+    "suspendBodyMany": "{{n}}명은 이 조직에 즉시 로그인할 수 없고 API 토큰도 사용할 수 없습니다. 역할과 그룹은 유지되며 언제든 재개할 수 있습니다.",
+    "suspendFor": "{{email}} 정지",
+    "reactivateFor": "{{email}} 재개",
+    "suspendedToast": "정지됨: {{n}}",
+    "reactivatedToast": "재개됨: {{n}}"
   },
   "superadmins": {
     "title": "설치 관리자",
@@ -313,7 +332,7 @@
       "sessions": "보안 비밀이 저장소에서 제거됩니다. 이를 받는 세션은 계속 실행되지만 재개할 수 없으며, 이를 이름으로 지정한 템플릿은 다시 만들기 전까지 시작할 수 없습니다."
     },
     "sessionCaption": "세션이 환경 변수로 받을 수 있는 보안 비밀입니다. 이름은 env/로 시작합니다. 값은 다시 표시되지 않습니다.",
-    "credentialCaption": "세션이 엔진의 도우미를 통해 사용할 수 있는 관리형 자격 증명(Business). 이름은 credential/ 로 시작합니다. 값은 다시 표시되지 않습니다.",
+    "credentialCaption": "세션이 엔진의 도우미를 통해 사용할 수 있는 관리형 자격 증명(Olivares AI Business). 이름은 credential/ 로 시작합니다. 값은 다시 표시되지 않습니다.",
     "colValue": "값",
     "colChanged": "마지막 변경",
     "colReference": "참조",
@@ -935,7 +954,7 @@
   "activation": {
     "title": "Business 활성화",
     "caption": "귀하의 에디션이 포함하는 모듈을 켭니다. 안전한 기본값이 있는 제어는 활성화되고, 보안 비밀 또는 정책 검토가 필요한 제어는 채우고 승격할 수 있도록 준비됩니다.",
-    "unavailable": "활성화는 business 에디션에서 사용할 수 있습니다.",
+    "unavailable": "활성화는 Olivares AI Business에서 사용할 수 있습니다.",
     "enablePreset": "프리셋 활성화",
     "addon": "모듈",
     "state": "상태",

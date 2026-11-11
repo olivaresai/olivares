@@ -58,7 +58,9 @@
     "truncated": "A mostrar os primeiros 200 ficheiros ou ramos. Atualize depois de reduzir as alterações.",
     "fileStatus": "Índice: {{index}}; árvore de trabalho: {{worktree}}",
     "commitHint": "Só as alterações preparadas são incluídas no commit, com o nome e o email do seu perfil.",
-    "working": "A trabalhar…"
+    "working": "A trabalhar…",
+    "nothingStaged": "Ainda não há nada preparado. Prepare um ficheiro para o incluir no commit.",
+    "noMessage": "Escreva uma mensagem de commit."
   },
   "title": "Sessões",
   "refresh": "Atualizar",
@@ -638,10 +640,18 @@
       "todos": "Lista de tarefas ({{done}} de {{total}} concluídas)",
       "send": "Enviar resposta",
       "answered": "Resposta enviada: {{answer}}",
-      "sendFailed": "Não foi possível enviar a resposta."
-    }
+      "sendFailed": "Não foi possível enviar a resposta.",
+      "implement": "Implementar",
+      "implementText": "Implementa o plano."
+    },
+    "cite": "Citar no campo de mensagem"
   },
   "changes": {
+    "scope": "Escopo das alterações",
+    "session": "Desde o início da sessão",
+    "latest": "Último turno",
+    "before": "Antes",
+    "after": "Depois",
     "title": "Alterações em {{folder}}",
     "titleNoFolder": "Alterações",
     "hint": "Ficheiros que o agente alterou na sua pasta desde que esta sessão começou.",
@@ -728,6 +738,16 @@
       "empty": "Escreva o comentário.",
       "atBase": "na base",
       "atTip": "na ponta do ramo"
+    },
+    "folder": {
+      "title": "Alterações sem commit",
+      "since": "Desde o último commit em <branch />.",
+      "sinceCommit": "Desde o último commit ({{base}}).",
+      "empty": "Sem alterações desde o último commit.",
+      "noCommit": "Esta pasta ainda não tem nenhum commit, por isso não há nada com que comparar.",
+      "original": "No último commit",
+      "modified": "Na pasta",
+      "fileTruncated": "Só é mostrado o início de cada lado."
     }
   },
   "peers": {
@@ -921,11 +941,14 @@
     "scriptsFailed": "Não foi possível ler os scripts do projeto.",
     "stopScript": "Parar",
     "title": "Terminal",
+    "maximize": "Maximizar terminal",
+    "restore": "Restaurar tamanho do terminal",
     "hint": "Uma shell na pasta desta sessão, dentro dos mesmos limites da sessão. É executada como o utilizador; cada linha de comando que escrever é registada.",
     "open": "Abrir terminal",
-    "close": "Fechar",
     "copy": "Copiar",
     "paste": "Colar",
+    "selectAll": "Selecionar tudo",
+    "jumpToLatest": "Ir para o mais recente",
     "again": "Abrir um novo terminal",
     "reconnecting": "A voltar a ligar…",
     "ended": "O terminal terminou.",
@@ -938,7 +961,8 @@
       "step_up": "Confirme primeiro a sua identidade e depois abra novamente o terminal.",
       "refused": "Não tem permissão para abrir um terminal nesta pasta.",
       "busy": "Tem demasiados terminais abertos. Feche um primeiro.",
-      "failed": "Não foi possível abrir o terminal. Tente novamente dentro de instantes."
+      "failed": "Não foi possível abrir o terminal. Tente novamente dentro de instantes.",
+      "unsafe": "Este comando não foi executado: contém caracteres de controlo ou ocultos que poderiam agir como teclas premidas."
     },
     "keys": {
       "esc": "Esc",
@@ -947,7 +971,27 @@
       "up": "Cima",
       "down": "Baixo"
     },
-    "closeLabel": "Fechar terminal"
+    "starting": "Iniciando…",
+    "list": "Terminais",
+    "new": "Novo terminal",
+    "split": "Dividir",
+    "unsplit": "Fechar divisão",
+    "search": "Pesquisar",
+    "actions": "Ações do terminal",
+    "searchLabel": "Pesquisar no terminal",
+    "searchPrevious": "Ocorrência anterior",
+    "searchNext": "Próxima ocorrência",
+    "rename": "Renomear terminal",
+    "renameHint": "Clique duas vezes para renomear",
+    "closeNamed": "Fechar {{name}}",
+    "closeTitle": "Fechar {{name}}?",
+    "closeBody": "Isto encerra o shell e tudo o que ele iniciou.",
+    "closeConfirm": "Fechar terminal",
+    "sendToAgent": "Enviar ao agente",
+    "sendToAgentHint": "Coloca a saída selecionada na sua mensagem, onde você pode editá-la antes de enviar.",
+    "contextLabel": "Saída de {{name}}:",
+    "drawer": "Gaveta de terminais",
+    "runInTerminal": "Executar no terminal"
   },
   "strip": {
     "needYou_one": "{{count}} precisa de si",

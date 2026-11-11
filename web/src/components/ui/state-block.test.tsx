@@ -33,6 +33,11 @@ describe('StateBlock', () => {
     const rows = el.querySelectorAll('[data-slot="state-block-skeleton"]')
     expect(rows.length).toBeGreaterThanOrEqual(3)
     rows.forEach((row) => expect(row).toHaveAttribute('aria-hidden', 'true'))
+    // The rows sit inside the box at the final row height; the label is for screen readers.
+    const box = el.querySelector('[data-slot="state-block-rows"]')!
+    expect(box).toHaveClass('rounded-card', 'bg-surface', 'shadow-card')
+    rows.forEach((row) => expect(row).toHaveClass('h-11'))
+    expect(within(el).getByText('Loading sessions…')).toHaveClass('sr-only')
   })
 
   it('Loading: the default label is the localized one', () => {
@@ -54,6 +59,13 @@ describe('StateBlock', () => {
     const el = block(container, 'empty')
     expect(el).toHaveAttribute('role', 'status')
     expect(within(el).getByText('No sessions in telescopes yet')).toBeVisible()
+    // An empty list shows the product's face, the four-row mark, and its action as a pill.
+    const mark = el.querySelector('[data-slot="state-mark"] svg')
+    expect(mark?.getAttribute('viewBox')).toBe('3.5 2 28 28')
+    expect(mark).toHaveClass('size-16')
+    expect(
+      within(el).getByRole('button', { name: 'New session' }).parentElement,
+    ).toHaveClass('*:rounded-full')
     const code = el.querySelector('code')!
     expect(code.textContent).toBe('olivares session start')
     await userEvent
@@ -82,6 +94,31 @@ describe('StateBlock', () => {
     expect(clear).toHaveBeenCalledTimes(1)
   })
 
+  it('Filtered in a panel: the same page made small, and never the product’s mark', () => {
+    const { container } = render(
+      <StateBlock
+        state="filtered"
+        size="panel"
+        title="No results"
+        filters="kube"
+        hiddenCount={3}
+        onClear={vi.fn()}
+      />,
+    )
+    const el = block(container, 'filtered')
+    expect(el).toHaveClass('py-8')
+    expect(el).not.toHaveClass('pt-26')
+    expect(el.querySelector('[data-slot="state-mark"]')).toBeNull()
+    // No icon either: the only drawing is the one inside Clear filters.
+    el.querySelectorAll('svg').forEach((svg) =>
+      expect(svg.closest('button')).not.toBeNull(),
+    )
+    expect(within(el).getByText('No results')).toHaveClass('text-heading')
+    expect(
+      within(el).getByRole('button', { name: 'Clear filters' }),
+    ).toBeInTheDocument()
+  })
+
   it('Error: says the list could not be read, with the request, time, request id, Try again and Open diagnostics', async () => {
     const retry = vi.fn()
     const diagnose = vi.fn()
@@ -98,6 +135,14 @@ describe('StateBlock', () => {
     const el = block(container, 'error')
     expect(el).toHaveAttribute('role', 'alert')
     expect(el).toHaveTextContent('Could not reach the engine.')
+    // A state page: the large icon in the failure color, the title at 22/800.
+    expect(el.querySelector('[data-slot="state-icon"]')).toHaveClass(
+      'text-bad',
+      '[&_svg]:size-18',
+    )
+    expect(within(el).getByText('Could not reach the engine.')).toHaveClass(
+      'font-extrabold',
+    )
     expect(el).toHaveTextContent('The list is not empty. It could not be read.')
     expect(el).toHaveTextContent('GET /v1/sessions · timeout after 10 s')
     expect(el).toHaveTextContent('Request 01J8ZK4Q7M · 18:06:41 UTC')
@@ -180,6 +225,12 @@ describe('StateBlock', () => {
     const el = block(container, 'no-access')
     expect(el).toHaveAttribute('role', 'status')
     expect(el).toHaveTextContent('You cannot open this')
+    // Calm: a large quiet lock, never the failure color.
+    expect(el.querySelector('[data-slot="state-icon"]')).toHaveClass(
+      'text-text-3',
+      '[&_svg]:size-18',
+    )
+    expect(el.innerHTML).not.toMatch(/\b(bg|text|border)-(bad|danger)/)
     expect(el).toHaveTextContent(
       'Your role does not include it. Nothing else is shown about it.',
     )

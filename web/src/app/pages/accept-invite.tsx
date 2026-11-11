@@ -16,15 +16,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { CircleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
-import { AuthShell } from '@/components/layout/auth-shell'
+import { AuthSheet, AuthShell } from '@/components/layout/auth-shell'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Notice } from '@/components/ui/notice'
 import { authApi } from '@/lib/api/endpoints'
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import { networkErrorText } from '@/lib/api/network-error-text'
@@ -94,31 +95,31 @@ export function AcceptInvitePage() {
 
   return (
     <AuthShell>
-      <Card className="p-6">
-        <div className="mb-5 flex flex-col gap-1">
-          <h1 className="font-display text-title text-foreground">
+      <AuthSheet>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[1.375rem]/7 font-extrabold text-balance text-text">
             {t('invite.title')}
           </h1>
           {token !== '' ? (
-            <p className="text-body text-muted-foreground">
+            <p className="text-body text-pretty text-text-2">
               {t('invite.subtitle')}
             </p>
           ) : null}
         </div>
 
         {token === '' ? (
-          <div className="flex flex-col gap-4">
-            <p className="text-body text-danger" role="alert">
+          <div className="flex flex-col gap-4.5">
+            <Notice tone="bad" icon={<CircleAlert />} role="alert">
               {t('invite.missingToken')}
-            </p>
-            <Button asChild variant="secondary" className="w-full">
+            </Notice>
+            <Button asChild variant="secondary" className="min-h-10 w-full">
               <Link to="/login">{t('invite.goToLogin')}</Link>
             </Button>
           </div>
         ) : (
           <form
             onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-4.5"
             noValidate
           >
             <Field
@@ -157,27 +158,26 @@ export function AcceptInvitePage() {
             </Field>
 
             {submitError && (
-              <p className="text-body text-danger" role="alert">
+              <Notice tone="bad" icon={<CircleAlert />} role="alert">
                 {submitError}
-              </p>
+              </Notice>
             )}
 
             <Button
               type="submit"
               variant="primary"
+              size="lg"
               disabled={mutation.isPending}
-              className="w-full"
+              className="mt-0.5 w-full"
             >
               {mutation.isPending ? t('invite.submitting') : t('invite.submit')}
             </Button>
-            <p className="text-center text-caption text-muted-foreground">
-              <Link to="/login" className="underline-offset-2 hover:underline">
-                {t('invite.goToLogin')}
-              </Link>
-            </p>
+            <Button asChild variant="ghost" className="min-h-10 w-full">
+              <Link to="/login">{t('invite.goToLogin')}</Link>
+            </Button>
           </form>
         )}
-      </Card>
+      </AuthSheet>
     </AuthShell>
   )
 }

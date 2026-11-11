@@ -6,7 +6,7 @@
 // paths with their status, and one path's text at the base beside its text at the
 // branch tip in the existing diff view. The real CodeDiff renders here.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -27,6 +27,7 @@ vi.mock('@/features/agentops/api', async (orig) => {
 })
 
 import { agentOpsApi } from '@/features/agentops/api'
+import { ApiError } from '@/lib/api/errors'
 import { sessionTurnBody } from '@/features/agentops/session-turn'
 import type {
   RunDTO,
@@ -213,6 +214,210 @@ describe('SessionBranchChanges', () => {
         'The branch changes could not be read. Try again in a moment.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('reads a worktree session as its branch, as before', async () => {
+    vi.mocked(agentOpsApi.worktreeDiff).mockResolvedValue(listing())
+    mount()
+
+    await screen.findByTestId('branch-changes-list')
+    expect(
+      screen.getByRole('heading', { name: 'Branch changes' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "What this session's branch holds that the workspace's current commit does not. Committed work only.",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('branch-changes-range')).toHaveTextContent(
+      `From ${BASE.slice(0, 12)} to ${HEAD.slice(0, 12)}`,
+    )
+    expect(screen.queryByText(/last commit|Uncommitted/)).toBeNull()
+  })
+
+  it("keeps the branch's own words when the engine refuses its branch with 409", async () => {
+    vi.mocked(agentOpsApi.worktreeDiff).mockRejectedValue(
+      new ApiError(409, 'conflict', "this session's branch b is gone"),
+    )
+    mount()
+
+    expect(
+      await screen.findByText(
+        'The branch changes could not be read. Try again in a moment.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/no commit yet/)).toBeNull()
+  })
+})
+
+// A session that works in its Git folder directly, with no worktree of its own: the engine
+// compares the folder as it is now with the folder's last commit, and the view says so.
+describe('SessionBranchChanges for a session in its own Git folder', () => {
+  const inFolder = { run_ref: 'run1', state: 'stopped' } as RunDTO
+  const folderListing = (
+    over: Partial<RunWorktreeDiffDTO> = {},
+  ): RunWorktreeDiffDTO => ({
+    branch: 'main',
+    base: BASE,
+    head: '',
+    working_tree: true,
+    files: [
+      { path: 'README', status: 'modified', added: 1, removed: 1 },
+      { path: 'sub/inner.txt', status: 'deleted', added: 0, removed: 1 },
+      // A file Git does not track yet: added, and no line counts.
+      { path: 'notes.txt', status: 'added' },
+    ],
+    truncated: false,
+    ...over,
+  })
+
+  it('lists what changed since the last commit of its branch, with no explainer', async () => {
+    vi.mocked(agentOpsApi.worktreeDiff).mockResolvedValue(folderListing())
+    mount(inFolder)
+
+    const list = await screen.findByTestId('branch-changes-list')
+    expect(
+      screen.getByRole('heading', { name: 'Uncommitted changes' }),
+    ).toBeInTheDocument()
+    const range = screen.getByTestId('branch-changes-range')
+    expect(range).toHaveTextContent('Since the last commit on main.')
+    // The branch in the sentence is a PathText: whole on hover, copied whole.
+    const branch = range.querySelector('[data-slot="path-text"] code')
+    expect(branch).toHaveAttribute('title', 'main')
+    expect(screen.queryByText(/Committed work only/)).toBeNull()
+    const readme = within(list).getByRole('button', { name: /README/ })
+    expect(readme).toHaveTextContent('+1')
+    expect(readme).toHaveTextContent('−1')
+    expect(readme).toHaveTextContent('Modified')
+    expect(
+      within(list).getByRole('button', { name: /inner\.txt/ }),
+    ).toHaveTextContent('Deleted')
+    const added = within(list).getByRole('button', { name: /notes\.txt/ })
+    expect(added).toHaveTextContent('Added')
+    // A count the engine did not give, or a zero, is not written as «+0 −0».
+    expect(added).not.toHaveTextContent(/[+−]\d/)
+    expect(list).not.toHaveTextContent('+0')
+    expect(list).not.toHaveTextContent('−0')
+  })
+
+  it('names a detached last commit by its short id', async () => {
+    vi.mocked(agentOpsApi.worktreeDiff).mockResolvedValue(
+      folderListing({ branch: '' }),
+    )
+    mount(inFolder)
+
+    const range = await screen.findByTestId('branch-changes-range')
+    expect(range).toHaveTextContent(
+      `Since the last commit (${BASE.slice(0, 12)}).`,
+    )
+  })
+
+  it('shows a file at the last commit beside the folder, with the same diff view', async () => {
+    vi.mocked(agentOpsApi.worktreeDiff).mockResolvedValue(folderListing())
+    vi.mocked(agentOpsApi.worktreeDiffFile).mockResolvedValue({
+      path: 'README',
+      status: 'modified',
+      original: 'as committed\n',
+      modified: 'as the agent left it\n',
+      binary: false,
+      truncated: false,
+    })
+    const user = userEvent.setup()
+    mount(inFolder)
+
+    await user.click(await screen.findByRole('button', { name: /README/ }))
+
+    const left = await screen.findByRole('textbox', {
+      name: 'At the last commit',
+    })
+    const right = screen.getByRole('textbox', { name: 'In the folder' })
+    expect(left.textContent).toContain('as committed')
+    expect(right.textContent).toContain('as the agent left it')
+    const version = screen.getByLabelText('Version')
+    expect(within(version).getByText('At the last commit')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'All changes' }))
+    expect(await screen.findByTestId('branch-changes-list')).toBeInTheDocument()
+  })
+
+  it('says nothing changed since the last commit, not an error', async () => {
+    vi.mocked(agentOpsApi.worktreeDiff).mockResolvedValue(
+      folderListing({ files: [] }),
+    )
+    mount(inFolder)
+
+    expect(
+      await screen.findByText('No changes since the last commit.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/could not be read/)).toBeNull()
+  })
+
+  it('says plainly that a folder with no commit yet has nothing to compare with', async () => {
+    vi.mocked(agentOpsApi.worktreeDiff).mockRejectedValue(
+      new ApiError(
+        409,
+        'conflict',
+        'this folder has no commit yet to compare with',
+      ),
+    )
+    mount(inFolder)
+
+    const said = await screen.findByText(
+      'This folder has no commit yet, so there is nothing to compare with.',
+    )
+    expect(said).not.toHaveClass('text-danger')
+    expect(screen.queryByText(/Try again/)).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('does not keep asking a folder with no commit yet while the session works', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(agentOpsApi.worktreeDiff).mockRejectedValue(
+        new ApiError(
+          409,
+          'conflict',
+          'this folder has no commit yet to compare with',
+        ),
+      )
+      mount({ ...inFolder, state: 'running' } as RunDTO)
+      // Past two polls of a working session: a commit, not the clock, reads it again.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(12_000)
+      })
+      expect(agentOpsApi.worktreeDiff).toHaveBeenCalledTimes(1)
+      expect(
+        screen.getByText(
+          'This folder has no commit yet, so there is nothing to compare with.',
+        ),
+      ).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('says when the list or a file was cut, without a size the folder may not have', async () => {
+    vi.mocked(agentOpsApi.worktreeDiff).mockResolvedValue(
+      folderListing({ truncated: true }),
+    )
+    vi.mocked(agentOpsApi.worktreeDiffFile).mockResolvedValue({
+      path: 'README',
+      status: 'modified',
+      original: 'a\n',
+      modified: 'b\n',
+      binary: false,
+      truncated: true,
+    })
+    const user = userEvent.setup()
+    mount(inFolder)
+
+    expect(
+      await screen.findByText('Showing the first 3 changed files.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /README/ }))
+    expect(
+      await screen.findByText('Showing only the beginning of each side.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/64 KB/)).toBeNull()
   })
 })
 

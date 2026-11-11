@@ -370,18 +370,25 @@
       "placeholder": "Enter는 이 턴이 끝난 뒤 보낼 메시지를 대기열에 넣습니다",
       "placeholderSteer": "Enter는 이 턴 뒤로 대기, Ctrl+Enter는 지금 바로 끼워 보냅니다",
       "discarded": "다음 메시지가 대기 중인 채로 세션이 해제되었습니다:",
-      "copy": "복사"
-    }
+      "copy": "복사",
+      "placeholderQueueKey": "{{key}}는 이 턴 뒤로 대기",
+      "placeholderSteerKey": "{{key}}는 지금 바로 끼워 보냅니다"
+    },
+    "stash": "초안 보관",
+    "stashRestore": "보관한 초안 되돌리기",
+    "plan": "계획",
+    "planHint": "먼저 계획: 도구는 읽고 계획만 제안하며 아무것도 바꾸지 않습니다. 다음 메시지부터 적용됩니다."
   },
   "shell": {
     "more": "더 보기",
     "searchCommands": "검색 및 명령",
     "search": "검색",
+    "searchGo": "검색 또는 이동…",
     "stopAll": "모두 중지",
     "workspaceCount": "Workspace: {{count}}",
     "rail": {
       "title": "세션",
-      "all": "전체",
+      "seeAll_other": "세션 {{count}}개 모두 보기",
       "groups": {
         "needsYou": "확인 필요",
         "working": "작업 중",
@@ -431,13 +438,14 @@
     "killswitch": {
       "estateStopped": "모든 에이전트 중지됨",
       "estateBody": "두 사용자 계정이 다시 시작을 승인할 때까지 에이전트는 작동할 수 없습니다.",
-      "agentStops": "활성 에이전트 중지 {{count}}건",
-      "agentStops_other": "활성 에이전트 중지 {{count}}건",
+      "agentStops": "에이전트 {{count}}개 중지됨",
+      "agentStops_other": "에이전트 {{count}}개 중지됨",
       "none": "중지된 항목이 없습니다. 세션과 에이전트가 정상적으로 실행됩니다."
     },
     "status": {
       "label": "상태",
       "running_other": "열린 세션 {{count}}개",
+      "needYou_other": "확인 필요 {{count}}개",
       "usage": "{{tool}} 사용량",
       "fiveHour": "5시간",
       "week": "주",
@@ -448,7 +456,6 @@
     },
     "collapse": "탐색 접기",
     "expand": "탐색 펼치기",
-    "openNavigation": "탐색 열기",
     "closeNavigation": "탐색 닫기"
   },
   "places": {
@@ -474,6 +481,10 @@
     "securityRedTeam": "레드팀 실행 및 점수",
     "operationsDeploy": "다른 호스트에 에이전트 배포",
     "operationsResidency": "데이터 레지던시 및 테넌트",
-    "retentionSchedules": "보존 일정은 Olivares Business에서만 적용됩니다. 이 에디션은 일정을 보관하며 아무것도 퍼지하지 않습니다."
+    "retentionSchedules": "보존 일정은 Olivares AI Business에서만 적용됩니다. 이 에디션은 일정을 보관하며 아무것도 퍼지하지 않습니다."
+  },
+  "groups": {
+    "control": "거버넌스",
+    "admin": "관리"
   }
 }

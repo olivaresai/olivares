@@ -17,7 +17,7 @@ import {
   useRouter,
   useRouterState,
 } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PageActionsProvider } from '@/components/ui/page-actions'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
@@ -29,13 +29,12 @@ import { AppFrame } from './app-frame'
 import { BrandMark } from './brand'
 import { BusinessRows } from './business-rows'
 import { CommandMenu } from './command-menu'
-import { DestinationSections } from './destination-sections'
 import { EngineUnreachable } from './engine-unreachable'
 import { GlobalShortcuts } from './shortcuts'
 import { RouteFrame } from './page-frames'
 import { SidePanelProvider } from './side-panel'
 import { TitleGate } from './title-gate'
-import { NavigationDrawer, Sidebar } from './sidebar'
+import { NavigationDrawer, Sidebar, PhoneNavigation } from './sidebar'
 import { TenantGate } from './tenant-gate'
 import { Topbar } from './topbar'
 import { TopbarSearchProvider } from './topbar-search'
@@ -59,15 +58,15 @@ function Splash() {
  * to /login (the api client's onUnauthorized clears an expired session, which lands
  * here). Authenticated, it renders the frame (app-frame.tsx): the left navigation, the top
  * bar and the routed work, plus the always-mounted ⌘K palette and, below 761 px, the
- * navigation drawer the top bar's menu button opens.
+ * navigation drawer the phone bar's More opens.
  *
  * THE SHELL CONTRACT (0.5, after console Estate):
  *
- *   left navigation │ top bar 56 px: title · search · notifications · account
+ *   left navigation │ top bar 52 px: title · pages · search · notifications
  *   ──────────────────────────────────────────────────────────────
  *   work — the whole remaining canvas [+ the side panel a page declares]
  *   ──────────────────────────────────────────────────────────────
- *   status bar 24 px: engine · running · usage · stops … Stop all · version
+ *   status bar 28 px: engine · open sessions · usage · stops … Stop all · edition
  *
  * ⛔ THE SHELL HAS NO ACTION BAR, AND REMOVING IT IS THE POINT OF THIS LANE.
  *    Until 2026-09-18 a `ShellLauncher` sat below `main` on every authenticated route:
@@ -164,6 +163,8 @@ export function AppLayout() {
   const signInRoute = useSignedOutRoute(status, engineUnreachable)
   // The drawer exists only where the column does not: widening the window closes it.
   const [drawer, setDrawer] = useState(false)
+  // The drawer has no trigger of its own: closing it puts focus back on the bar's More.
+  const more = useRef<HTMLButtonElement>(null)
   const wide = useMinWidth(761)
   if (wide && drawer) setDrawer(false)
   if (engineUnreachable) return <EngineUnreachable />
@@ -179,42 +180,46 @@ export function AppLayout() {
           <PaneWidthsSync />
           <SidePanelProvider>
             <TopbarSearchProvider>
-              <TitleGate>
-                <AppFrame
-                  sidebar={<Sidebar />}
-                  topbar={<Topbar onMenu={() => setDrawer(true)} />}
-                  statusBar={<StatusBar />}
-                  overlays={
-                    <>
-                      <NavigationDrawer
-                        open={drawer}
-                        onOpenChange={setDrawer}
-                      />
-                      <CommandMenu />
-                      <AskPanel />
-                      <GlobalShortcuts />
-                      <NewSessionHost />
-                    </>
-                  }
-                >
-                  {/* No active tenant ⇒ the routed view is never mounted, so it cannot
+              <PageActionsProvider shell>
+                <TitleGate>
+                  <AppFrame
+                    sidebar={<Sidebar />}
+                    topbar={<Topbar />}
+                    statusBar={<StatusBar />}
+                    overlays={
+                      <>
+                        <NavigationDrawer
+                          open={drawer}
+                          onOpenChange={setDrawer}
+                          returnFocus={more}
+                        />
+                        <PhoneNavigation
+                          onMore={() => setDrawer(true)}
+                          moreRef={more}
+                        />
+                        <CommandMenu />
+                        <AskPanel />
+                        <GlobalShortcuts />
+                        <NewSessionHost />
+                      </>
+                    }
+                  >
+                    {/* No active tenant ⇒ the routed view is never mounted, so it cannot
                 fire the tenant-scoped reads the engine would answer with 400
                 "tenant required". See TenantGate. */}
-                  {/* One host per page for the verb a TABBED screen declares from
+                    {/* One host per page for the verb a TABBED screen declares from
                 inside its active tab. It wraps the routed content, so the header and
                 the tab that fills its primary-action slot share it. */}
-                  <PageActionsProvider>
                     <RouteFrame pathname={pathname}>
                       <TenantGate>
-                        <DestinationSections />
                         <Outlet />
                         <BusinessRows />
                         <SettingsVisit />
                       </TenantGate>
                     </RouteFrame>
-                  </PageActionsProvider>
-                </AppFrame>
-              </TitleGate>
+                  </AppFrame>
+                </TitleGate>
+              </PageActionsProvider>
             </TopbarSearchProvider>
           </SidePanelProvider>
         </PreferencesSync>

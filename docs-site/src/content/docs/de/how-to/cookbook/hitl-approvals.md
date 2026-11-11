@@ -92,7 +92,11 @@ Ledger stillschweigend vergisst.
 
 ## Hinweise
 
-Bei unterstützten Codex-Berechtigungsanfragen gewährt **Für diese Sitzung genehmigen** die geprüfte Berechtigung für die aktuelle Sitzung. **Einmal genehmigen** behält sein einmaliges Verhalten bei. Dieselbe Wahl steht im Gespräch und in der Queue zur Verfügung. API-Clients können `{"decision":"approve","scope":"session"}` senden, wenn die Anfrage `session_scope_allowed: true` meldet. Andere Anfragen weisen diesen Geltungsbereich mit HTTP 400 ab und halten keine Entscheidung fest. Der Entscheidungsverlauf und das Audit-Ereignis behalten den Geltungsbereich; wenn mehrere Personen genehmigen müssen, hält eine einmalige Entscheidung die Freigabe einmalig.
+**Für diese Sitzung genehmigen** erlaubt denselben Befehl oder dasselbe Werkzeug mit demselben Zielpfad für diese Sitzung. Eine andere Aktion oder eine neue Sitzung fragt erneut. **Einmal genehmigen** bleibt einmalig. Die Berechtigungen stehen im Kontextbereich der Sitzung und können dort von einem Administrator widerrufen werden. Passende Genehmigungsrichtlinien erfordern jedes Mal eine Prüfung und blenden die Sitzungsoption aus.
+
+Bei Edit und Write muss auch die gesamte wirksame Werkzeugeingabe einschließlich des Inhalts übereinstimmen. Diese Berechtigungen haben kein eigenes Zeitlimit: Sie enden bei Widerruf, beim Stoppen der Sitzung oder beim Wechsel ihres Prozesses. MultiEdit bietet keine Sitzungsberechtigungen.
+
+Die API akzeptiert `{"decision":"approve","scope":"session"}` nur bei `session_scope_allowed: true`. Jede Entscheidung, Wiederverwendung und jeder Widerruf wird protokolliert. Der Anbieter erhält einmalige Antworten, damit Widerruf und aktuelle Richtlinien wirksam bleiben.
 
 - `escalate_in_seconds` benachrichtigt das SoD-Team, wenn eine Anfrage
   unentschieden liegen bleibt — nutze es für produktionskritische Aktionen.

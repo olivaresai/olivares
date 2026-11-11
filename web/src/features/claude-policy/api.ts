@@ -26,6 +26,7 @@ import type {
   PdpDecision,
   PdpEngine,
   PdpExampleRequest,
+  PdpPolicyTest,
   PdpPublishResult,
   PdpRevision,
   PdpRollbackResult,
@@ -132,8 +133,18 @@ export const claudePolicyApi = {
     http.delete<PdpPublishResult>(`${PDP}/active`, undefined, {
       query: { engine: 'cedar' },
     }),
-  pdpPublish: (engine: PdpEngine, source: string, note?: string) =>
-    http.post<PdpPublishResult>(`${PDP}/publish`, { engine, source, note }),
+  pdpPublish: (
+    engine: PdpEngine,
+    source: string,
+    note?: string,
+    tests?: readonly PdpPolicyTest[],
+  ) =>
+    http.post<PdpPublishResult>(`${PDP}/publish`, {
+      engine,
+      source,
+      note,
+      tests,
+    }),
   /** Appends an activation record selecting an EXISTING revision. It creates no
    *  new revision and deletes none: the immutable history is preserved. */
   pdpRollback: (engine: PdpEngine, revision: number) =>

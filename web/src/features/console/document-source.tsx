@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { knowledgeApi, knowledgeKeys } from '@/features/knowledge/api'
+import { downloadBlob } from '@/lib/api/download'
 import { useAuth } from '@/lib/auth/context'
 import { useModuleOn } from '@/stores/modules'
 import type {
@@ -226,10 +227,5 @@ export function downloadDefinition(d: SourceDefinition) {
   const blob = new Blob([JSON.stringify(d, null, 2) + '\n'], {
     type: 'application/json',
   })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${d.name.replace(/[^A-Za-z0-9._-]/g, '_')}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadBlob(blob, `${d.name.replace(/[^A-Za-z0-9._-]/g, '_')}.json`)
 }

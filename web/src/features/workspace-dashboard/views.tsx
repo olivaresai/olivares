@@ -16,8 +16,13 @@ const WorkspaceDashboardView = lazy(() =>
 
 export const VIEWS = [
   // Per-workspace dashboard: agents, sessions, resources and groups scoped
-  // to the workspace selected in the topbar switcher. Gated on tenant:read (the
-  // same permission the workspace list requires).
+  // to the workspace selected in the topbar switcher. Gated on the folder read
+  // (sessions:workspace:read), so a member who works in their folders finds Files;
+  // without the tenant read the workspace list stays empty and the page shows the
+  // session folders. The folder read belongs to the sessions module, a kernel module
+  // that runs on every installation (docs/module-spec.md), so no module switch hides
+  // this page. ponytail: the folder read stands in for the member's granted-folders
+  // read; that read takes this permission when the engine declares it.
   {
     order: 30,
     id: 'workspaceDashboard',
@@ -31,7 +36,7 @@ export const VIEWS = [
     // PanelsTopLeft, not Layers: Layers belongs to Platforms; a dashboard
     // of scoped panels is what this view actually is.
     icon: PanelsTopLeft,
-    permission: 'tenant:read',
+    permission: 'sessions:workspace:read',
     element: lazyView(WorkspaceDashboardView),
   },
 ] satisfies ViewEntry[]

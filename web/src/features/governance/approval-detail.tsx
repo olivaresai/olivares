@@ -271,7 +271,7 @@ export function ApprovalDetailPanel({
               {withInlineCommands(t('detail.reenableNeedsAdmins'))}{' '}
               <AppLink
                 href="/identity"
-                className="text-accent-text underline underline-offset-2"
+                className="text-foreground underline underline-offset-2"
               >
                 {t('detail.openIdentity')}
               </AppLink>
@@ -299,6 +299,13 @@ export function ApprovalDetailPanel({
                     : t('approvals.approveOnce')}
                 </Button>
               )}
+              {mayDecide &&
+              !detail?.session_scope_allowed &&
+              detail?.policy_ref ? (
+                <p className="text-caption text-text-2">
+                  {t('approvals.sessionPolicy')}
+                </p>
+              ) : null}
               {mayDecide && detail?.session_scope_allowed && (
                 <Button
                   variant="secondary"
@@ -503,6 +510,7 @@ function DecisionTrail({
   if (items.length === 0)
     return (
       <EmptyState
+        size="panel"
         description={t('detail.trailEmptyHint')}
         title={t('detail.trailEmpty')}
       />

@@ -7,7 +7,7 @@
 // as a failure, a deployment gap as a denial, and an unavailable check as a negative
 // verdict. Each test kills a specific mutation.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,7 +19,15 @@ const api = {
   open: vi.fn(),
   sessions: vi.fn(),
   policies: vi.fn(),
+  putPolicy: vi.fn(),
 }
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 const perm = { admin: true }
 const stream = {
   status: 'closed' as string,
@@ -63,8 +71,10 @@ const INPUT: VoiceOpenInput = {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   api.decisions.mockReset()
   api.open.mockReset()
+  api.putPolicy.mockReset()
   perm.admin = true
   stream.status = 'closed'
   stream.enabled = undefined
@@ -173,6 +183,29 @@ describe('el open es admin y el literal es el del motor', () => {
   })
 })
 
+// AN OPEN REFUSED BY EDITION is not «the approval gate did not answer»: the gate was never
+// asked. The edition line says what is true, in place of the outcome.
+describe('an open refused by edition', () => {
+  it('says the edition line, never an unanswered gate', async () => {
+    api.open.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'engineer',
+        capability: 'voice',
+      }),
+    )
+    wrap(<GovernedOpen input={INPUT} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: /open session/i }),
+    )
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'is part of Olivares AI Engineer.',
+    )
+    expect(screen.queryByText(/did not answer/i)).toBeNull()
+    expect(document.body.textContent).not.toMatch(/raw: 403|edition_required/)
+  })
+})
+
 describe('la superficie viva no finge estar viva', () => {
   it('sin sesión no abre el flujo ni pide decisiones', async () => {
     wrap(<VoiceSessionSurface sessionRef={null} />)
@@ -254,5 +287,50 @@ describe('la superficie se alcanza desde la vista de voz', () => {
     // La tabla no pinta el session_ref: se pulsa por una columna que SI muestra.
     await userEvent.click(await screen.findByText('a1'))
     await waitFor(() => expect(api.decisions).toHaveBeenCalledWith('s-42'))
+  })
+})
+
+// A POLICY SAVE THE ENGINE REFUSES BY EDITION is the calm edition line, never its sentence
+// in red; any other failure says the engine's sentence, as it always did.
+describe('a voice policy save that fails', () => {
+  async function savePolicy() {
+    api.sessions.mockResolvedValue({ items: [] })
+    api.policies.mockResolvedValue({ items: [] })
+    const user = userEvent.setup()
+    wrap(<VoiceView />)
+    await user.click(await screen.findByRole('tab', { name: 'Policies' }))
+    const [add] = await screen.findAllByRole('button', { name: /new policy/i })
+    await user.click(add)
+    const dialog = await screen.findByRole('dialog')
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Save policy' }),
+    )
+  }
+
+  it('refused by edition: the edition line, calm', async () => {
+    api.putPolicy.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'engineer',
+        capability: 'voice',
+      }),
+    )
+    await savePolicy()
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Engineer.')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('any other failure: the engine’s sentence', async () => {
+    api.putPolicy.mockRejectedValue(
+      new ApiError(400, 'invalid', 'max_session_minutes must be positive'),
+    )
+    await savePolicy()
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'max_session_minutes must be positive',
+      ),
+    )
+    expect(toast.info).not.toHaveBeenCalled()
   })
 })

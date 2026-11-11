@@ -21,6 +21,10 @@ import (
 // modules have always run outside the administrator's selectable catalog.
 // ConsoleEntries names the console views (registry ids) whose page follows this
 // module's state; one row at most names a view.
+// Edition is the lowest edition that holds the module (community, engineer, business).
+// A row with a Title is placed by the route gate: below its edition its routes answer
+// 403 edition_required naming Title, except GET and HEAD when ReadsBelow keeps stored
+// data readable and exportable. A row without a Title keeps its own refusal.
 type Spec struct {
 	Namespace         string                      `json:"namespace"`
 	Name              string                      `json:"name"`
@@ -28,6 +32,8 @@ type Spec struct {
 	Constructor       string                      `json:"constructor"`
 	ConstructorInputs map[string]ConstructorInput `json:"constructor_inputs,omitempty"`
 	Edition           string                      `json:"edition"`
+	ReadsBelow        bool                        `json:"reads_below,omitempty"`
+	Title             string                      `json:"title,omitempty"`
 	EditionSlot       bool                        `json:"edition_slot,omitempty"`
 	Kind              string                      `json:"kind"`
 	Requires          []string                    `json:"requires"`

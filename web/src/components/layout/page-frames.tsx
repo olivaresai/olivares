@@ -91,14 +91,9 @@ export function frameFor(pathname: string): 'document' | 'work' {
 export function ConsolePage({
   children,
   className,
-  pad = 'default',
 }: {
   children: ReactNode
   className?: string
-  /** `flush` drops the 16 px top padding. Home uses it so the first work row can
-   *  sit at header + title + composer (48 + 24 + 64 = 136). Other document
-   *  routes keep `default`. */
-  pad?: 'default' | 'flush'
 }) {
   return (
     <div
@@ -110,10 +105,7 @@ export function ConsolePage({
     >
       <div
         data-slot="console-page-body"
-        className={cn(
-          'mx-auto w-full max-w-page px-4 sm:px-6 print:max-w-none print:px-0 print:py-0',
-          pad === 'flush' ? 'pt-0 pb-4' : 'py-4',
-        )}
+        className="mx-auto w-full max-w-page px-4 py-4 sm:px-6 print:max-w-none print:px-0 print:py-0"
       >
         {children}
       </div>
@@ -160,12 +152,5 @@ export function RouteFrame({
   if (frameFor(pathname) === 'work') {
     return <WorkPane>{children}</WorkPane>
   }
-  const path = pathname.replace(/\/+$/, '') || '/'
-  return (
-    <ConsolePage
-      pad={resolveLocation(path).kind === 'home' ? 'flush' : 'default'}
-    >
-      {children}
-    </ConsolePage>
-  )
+  return <ConsolePage>{children}</ConsolePage>
 }

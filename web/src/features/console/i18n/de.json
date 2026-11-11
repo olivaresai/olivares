@@ -156,7 +156,8 @@
     "statuses": {
       "active": "Aktiv",
       "inactive": "Inaktiv",
-      "error": "Fehler"
+      "error": "Fehler",
+      "suspended": "Gesperrt"
     },
     "roles": {
       "viewer": "Betrachter",
@@ -172,7 +173,25 @@
     "endSessionsFor": "Anmeldungen für {{email}} beenden?",
     "endSessionsBody": "Alle aktiven Anmeldungen für {{email}} funktionieren in dieser Organisation nicht mehr. Anmeldungen bei anderen Organisationen, API-Tokens und Konto bleiben unverändert.",
     "sessionsEnded": "Der Zugriff auf diese Organisation wurde beendet",
-    "totpResetDone": "TOTP-Faktor zurückgesetzt."
+    "totpResetDone": "TOTP-Faktor zurückgesetzt.",
+    "search": "Personen suchen",
+    "filterLabel": "Nach Status filtern",
+    "filterAll": "Alle Status",
+    "noMatch": "Keine Treffer",
+    "noMatchHint": "Ändern Sie die Suche oder den Statusfilter.",
+    "bulkLabel": "Aktionen für die ausgewählten Personen",
+    "selected": "Ausgewählt: {{n}}",
+    "selectAll": "Alle angezeigten Personen auswählen",
+    "selectRow": "{{email}} auswählen",
+    "suspend": "Sperren",
+    "reactivate": "Entsperren",
+    "suspendTitle": "Zugriff sperren",
+    "suspendBody": "{{email}} kann sich in dieser Organisation ab sofort nicht mehr anmelden und keine API-Token mehr verwenden. Rolle und Gruppen bleiben erhalten, und Sie können den Zugriff jederzeit wieder freigeben.",
+    "suspendBodyMany": "{{n}} Personen können sich in dieser Organisation ab sofort nicht mehr anmelden und keine API-Token mehr verwenden. Rollen und Gruppen bleiben erhalten, und Sie können den Zugriff jederzeit wieder freigeben.",
+    "suspendFor": "{{email}} sperren",
+    "reactivateFor": "{{email}} entsperren",
+    "suspendedToast": "Gesperrt: {{n}}",
+    "reactivatedToast": "Entsperrt: {{n}}"
   },
   "superadmins": {
     "title": "Administratoren der Installation",
@@ -313,7 +332,7 @@
       "sessions": "Das Secret wird aus dem Speicher entfernt. Eine Sitzung, die es erhält, läuft weiter, kann aber nicht fortgesetzt werden, und eine Vorlage, die es nennt, kann nicht starten, bis Sie es neu anlegen."
     },
     "sessionCaption": "Geheimnisse, die eine Sitzung als Umgebungsvariablen erhalten kann. Namen beginnen mit env/. Ein Wert wird nie wieder angezeigt.",
-    "credentialCaption": "Verwaltete Zugangsdaten, die eine Sitzung über die Helfer der Engine nutzen kann (Business). Namen beginnen mit credential/. Ein Wert wird nie wieder angezeigt.",
+    "credentialCaption": "Verwaltete Zugangsdaten, die eine Sitzung über die Helfer der Engine nutzen kann (Olivares AI Business). Namen beginnen mit credential/. Ein Wert wird nie wieder angezeigt.",
     "colValue": "Wert",
     "colChanged": "Zuletzt geändert",
     "colReference": "Referenz",
@@ -937,7 +956,7 @@
   "activation": {
     "title": "Business-Aktivierung",
     "caption": "Aktivieren Sie die in Ihrer Edition enthaltenen Module. Kontrollen mit sicherer Voreinstellung werden aktiviert; Kontrollen, die ein Geheimnis oder eine Richtlinienprüfung benötigen, werden zum Ausfüllen und Freigeben vorbereitet.",
-    "unavailable": "Die Aktivierung ist in der Business-Edition verfügbar.",
+    "unavailable": "Die Aktivierung ist in der Olivares AI Business-Edition verfügbar.",
     "enablePreset": "Preset aktivieren",
     "addon": "Modul",
     "state": "Status",

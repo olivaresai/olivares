@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AppLink } from '@/components/ui/app-link'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { agentOpsApi } from '@/features/agentops/api'
@@ -159,12 +160,12 @@ function RacePanel({ refs }: { refs: string[] }) {
                 className="flex min-w-0 flex-col gap-3 rounded-lg border border-border p-3"
               >
                 <h2 className="break-words text-body font-semibold">
-                  <a
+                  <AppLink
                     className="underline underline-offset-2"
                     href={`/agentops?session=run:${encodeURIComponent(run.run_ref)}`}
                   >
                     {run.name || run.provider_driver || run.run_ref}
-                  </a>
+                  </AppLink>
                 </h2>
                 <p
                   title={t('meter.costTitle')}

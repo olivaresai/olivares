@@ -7,6 +7,7 @@
 import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { StatusChip } from '@/components/ui/status-chip'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { ProviderAccent } from '@/features/agentops/provider-accent'
 import { useProfileProviders } from '@/features/agentops/profile-authentication'
@@ -24,6 +25,8 @@ import {
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { accountLabel } from './account-marks'
+import { planName } from './plan-name'
+import type { ProfileEnabled } from './use-profile-enabled'
 
 /** What a row says about a profile, in the words the page prints. */
 export type ProfileState =
@@ -34,6 +37,8 @@ export type ProfileState =
       signingIn?: boolean
       failed?: boolean
       error?: string
+      /** The plan its tool reports, as its vendor names it ("Claude Max"). */
+      plan?: string
     }
   | { kind: 'key'; name?: string; hint?: string }
 
@@ -75,7 +80,7 @@ export function StateChip({
   )
 }
 
-/** "Account · signed in", "API key · Local stub (sk-…7f2a)". */
+/** "Account · signed in · Claude Max", "API key · Local stub (sk-…7f2a)". */
 export function useProfileDetail(state: ProfileState): string {
   const { t } = useTranslation('agentTools')
   if (state.kind === 'key') {
@@ -87,19 +92,24 @@ export function useProfileDetail(state: ProfileState): string {
   if (state.failed) return t('profiles.accountUnreadable')
   if (state.signingIn) return t('profiles.accountSigningIn')
   if (state.signedIn === undefined) return t('profiles.accountChecking')
-  return t(
+  const text = t(
     state.signedIn ? 'profiles.accountSignedIn' : 'profiles.accountNotSignedIn',
   )
+  return state.signedIn && state.plan ? `${text} · ${state.plan}` : text
 }
 
 export function ProfileRowView({
   model,
   onOpen,
   onSignIn,
+  enabled,
 }: {
   model: ProfileRowModel
   onOpen: () => void
   onSignIn: () => void
+  /** The profile's on/off switch; absent for the default login and for a role that
+   * cannot change profiles. */
+  enabled?: ProfileEnabled
 }) {
   const { t } = useTranslation('agentTools')
   const detail = useProfileDetail(model.state)
@@ -157,6 +167,17 @@ export function ProfileRowView({
         ) : (
           <StateChip tone="wait">{t('profiles.needsKey')}</StateChip>
         )}
+        {enabled?.set ? (
+          <Switch
+            className="ml-3"
+            checked={enabled.on}
+            disabled={enabled.pending}
+            onCheckedChange={enabled.set}
+            aria-label={t(enabled.on ? 'profiles.turnOff' : 'profiles.turnOn', {
+              name: model.name,
+            })}
+          />
+        ) : null}
       </span>
       <ChevronRight
         aria-hidden
@@ -220,6 +241,7 @@ export function useAccountRow(account: ProviderAccountDTO): ProfileRowModel {
       signingIn: signedIn === false && isSigningIn(status.data),
       failed: status.isError,
       error: status.error instanceof Error ? status.error.message : undefined,
+      plan: planName(account.driver, account.plan),
     },
     ready: !off && signedIn === true,
     off,

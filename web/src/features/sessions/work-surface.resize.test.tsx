@@ -153,8 +153,10 @@ const stored = () => usePaneWidthsStore.getState().widths
 
 describe('WorkSurface resizing', () => {
   it('keeps the stylesheet widths until a person stores one', async () => {
-    renderSurface()
-    await screen.findByTestId('work-rail')
+    renderSurface({
+      address: { address: sessionA.key, pane: 'context', evidence: 'checks' },
+    })
+    await screen.findByTestId('session-context')
     expect(surfaceGrid().style.getPropertyValue('--list-w')).toBe('')
     expect(surfaceGrid().style.getPropertyValue('--ctx-w')).toBe('')
   })
@@ -189,49 +191,32 @@ describe('WorkSurface resizing', () => {
         .className.split(/\s+/)
         .filter((c) => c.includes('grid-cols-'))
     // ONE column template at a time: a second, media-prefixed one outranks the first in the
-    // stylesheet and wraps Details under the list (measured at 1440 px).
+    // stylesheet and wraps Details under the thread (measured at 1440 px). The list is the one
+    // sidebar, not a column of this grid, so the grid holds the thread and Details only.
     expect(templates()).toEqual([
-      'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+      'grid-cols-[minmax(0,1fr)_min(var(--ctx-w),35%)]',
     ])
   })
 
-  it('keeps the list and the thread side by side from 761 px while Details is a sheet', async () => {
+  it('keeps the thread full width at 1024 px while Details is a sheet', async () => {
     stubViewportWidth(1024)
-    renderSurface()
-    await screen.findByTestId('work-rail')
+    renderSurface({
+      address: { address: sessionA.key, pane: 'narrative', evidence: 'checks' },
+    })
+    await screen.findByTestId('session-narrative')
     expect(
       surfaceGrid()
         .className.split(/\s+/)
         .filter((c) => c.includes('grid-cols-')),
-    ).toEqual(['min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)]'])
+    ).toEqual(['grid-cols-1'])
   })
 
-  it('resizes the list from the keyboard and remembers the width', async () => {
-    const user = userEvent.setup()
-    renderSurface()
-    const handle = await screen.findByRole('separator', {
-      name: 'Resize the session list',
-    })
-    handle.focus()
-    await user.keyboard('{ArrowRight}')
-    expect(stored()['sessions-list']).toBe(376)
-    expect(surfaceGrid().style.getPropertyValue('--list-w')).toBe('376px')
-  })
-
-  it('puts the list back to its default on Enter and on double-click', async () => {
-    const user = userEvent.setup()
-    usePaneWidthsStore.setState({ widths: { 'sessions-list': 480 } })
-    renderSurface()
-    const handle = await screen.findByRole('separator', {
-      name: 'Resize the session list',
-    })
-    expect(surfaceGrid().style.getPropertyValue('--list-w')).toBe('480px')
-    handle.focus()
-    await user.keyboard('{Enter}')
-    expect(stored()['sessions-list']).toBeUndefined()
-    expect(surfaceGrid().style.getPropertyValue('--list-w')).toBe('')
-    usePaneWidthsStore.setState({ widths: { 'sessions-list': 480 } })
-    await user.dblClick(handle)
+  it('gives the one sidebar no width handle: the list is not a resizable column', async () => {
+    renderSurface(split)
+    await screen.findByRole('region', { name: 'Session beside' })
+    expect(
+      screen.queryByRole('separator', { name: 'Resize the session list' }),
+    ).toBeNull()
     expect(stored()['sessions-list']).toBeUndefined()
   })
 
@@ -252,7 +237,9 @@ describe('WorkSurface resizing', () => {
 
   it('offers the details handle only while the pane is open beside the thread', async () => {
     stubViewportWidth(1440)
-    renderSurface()
+    renderSurface({
+      address: { address: sessionA.key, pane: 'context', evidence: 'checks' },
+    })
     expect(
       await screen.findByRole('separator', { name: 'Resize the details pane' }),
     ).toBeInTheDocument()
@@ -264,26 +251,20 @@ describe('WorkSurface resizing', () => {
 
   it('has no details handle below 1120 px, where Details is a sheet', async () => {
     stubViewportWidth(1119)
-    renderSurface()
-    await screen.findByTestId('work-rail')
+    renderSurface({
+      address: { address: sessionA.key, pane: 'context', evidence: 'checks' },
+    })
+    await screen.findByTestId('session-narrative')
     expect(
       screen.queryByRole('separator', { name: 'Resize the details pane' }),
     ).toBeNull()
-    expect(
-      screen.getByRole('separator', { name: 'Resize the session list' })
-        .className,
-    ).toContain('max-[760px]:hidden')
   })
 
-  it('keeps the handles off a phone, where each pane is a screen of its own', async () => {
+  it('keeps the thread handle off a phone, where each pane is a screen of its own', async () => {
     renderSurface(split)
-    const list = await screen.findByRole('separator', {
-      name: 'Resize the session list',
-    })
-    const beside = screen.getByRole('separator', {
+    const beside = await screen.findByRole('separator', {
       name: 'Resize the session beside',
     })
-    expect(list.className).toContain('max-[760px]:hidden')
     expect(beside.className).toContain('max-[1279px]:hidden')
   })
 

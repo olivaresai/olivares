@@ -36,7 +36,16 @@ export const START_PAGE_IDS = [
 
 export type StartPageId = (typeof START_PAGE_IDS)[number]
 
+/** Which key sends a message from the session composer: Enter (Shift+Enter breaks a line),
+ * or Ctrl+Enter (Enter breaks a line). */
+export type SendKey = 'enter' | 'modEnter'
+/** What the send key does while the tool works: line the message up behind the turn, or
+ * steer it into the turn. The other choice is the same key with Ctrl. */
+export type SendWhileRunning = 'queue' | 'steer'
+
 export const CLIENT_SETTING_DEFAULTS = {
+  sendKey: 'enter' as SendKey,
+  sendWhileRunning: 'queue' as SendWhileRunning,
   clock: '24' as ClockFormat,
   startPage: 'sessions' as StartPageId,
   confirmStop: true,
@@ -58,6 +67,8 @@ export const CLIENT_SETTING_DEFAULTS = {
 }
 
 interface ClientSettings {
+  sendKey: SendKey
+  sendWhileRunning: SendWhileRunning
   clock: ClockFormat
   startPage: StartPageId
   confirmStop: boolean
@@ -71,6 +82,8 @@ interface ClientSettings {
   notificationEvents: NotificationEvents
   setSessionDefaults: (defaults: Partial<SessionDefaults>) => void
   setNotificationEvents: (events: Partial<NotificationEvents>) => void
+  setSendKey: (sendKey: SendKey) => void
+  setSendWhileRunning: (sendWhileRunning: SendWhileRunning) => void
   setClock: (clock: ClockFormat) => void
   setStartPage: (startPage: StartPageId) => void
   setConfirmStop: (confirmStop: boolean) => void
@@ -93,6 +106,8 @@ export const useClientSettings = create<ClientSettings>()(
         set((s) => ({
           notificationEvents: { ...s.notificationEvents, ...events },
         })),
+      setSendKey: (sendKey) => set({ sendKey }),
+      setSendWhileRunning: (sendWhileRunning) => set({ sendWhileRunning }),
       setClock: (clock) => set({ clock }),
       setStartPage: (startPage) => set({ startPage }),
       setConfirmStop: (confirmStop) => set({ confirmStop }),
@@ -110,6 +125,10 @@ export const useClientSettings = create<ClientSettings>()(
         return {
           ...current,
           ...saved,
+          // Anything but the other choice is the default: a stored blob is untrusted.
+          sendKey: saved?.sendKey === 'modEnter' ? 'modEnter' : 'enter',
+          sendWhileRunning:
+            saved?.sendWhileRunning === 'steer' ? 'steer' : 'queue',
           sessionDefaults: Object.fromEntries(
             Object.entries(CLIENT_SETTING_DEFAULTS.sessionDefaults).map(
               ([field, fallback]) => {

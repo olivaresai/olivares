@@ -112,6 +112,7 @@ when a handler returns a code that is not in it.
 | `domain_claimed` | Remove the domain from the other identity provider first, or use another domain. |
 | `domain_claimed_elsewhere` |  |
 | `dr_unavailable` |  |
+| `edition_required` | Add a license in Settings > Edition, or see https://olivares.ai/pricing |
 | `entity_authorization_unavailable` |  |
 | `exposure_requires_step_up` | Confirm with a passkey or security key, or with your authenticator code when the message asks for it. Enroll either under Settings › Sign-in and security. |
 | `exposure_unavailable` |  |

@@ -34,7 +34,10 @@ import { DenyDialog, useDecision } from '@/features/governance/decision-dialog'
 import '@/features/governance/i18n'
 import type { ApprovalDTO } from '@/features/governance/types'
 import { usePendingApprovals } from '@/features/governance/use-pending-approvals'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import { auditApi } from '@/lib/api/endpoints'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { useStepUpStore } from '@/stores/step-up'
 import {
@@ -191,15 +194,21 @@ export function NotificationBell() {
     ? `${t('notifications.title')}, ${t('nav:shell.rail.state.need')}`
     : t('notifications.title')
 
-  const { data, isLoading } = useQuery({
+  // The recent read is the ledger's: the engine answers it to audit:read alone. A person
+  // without it is told who sees recent activity, never shown an empty ledger, and the
+  // console does not ask. A 403 says the same: the permission changed under the session.
+  const canReadAudit = can('audit:read')
+  const { data, isLoading, error } = useQuery({
     queryKey: ['notifications', activeTenant, boundary],
     queryFn: () => auditApi.recent({ limit: RECENT_READ }),
     refetchInterval: REFETCH_INTERVAL,
     // Read while the bell is open: the dot no longer comes from the ledger. The bell lives
     // in the topbar, outside the routed TenantGate: the read is tenant-scoped, and with no
     // tenant selected the engine answers 400.
-    enabled: open && !!activeTenant,
+    enabled: open && canReadAudit && !!activeTenant,
   })
+  const auditOnly =
+    !canReadAudit || (error instanceof ApiError && error.isForbidden)
 
   const events = (data?.items ?? [])
     .filter((e) => !hiddenInBell(e.action))
@@ -230,6 +239,9 @@ export function NotificationBell() {
     })
   }
   const leave = () => setOpen(false)
+  // The full record is the Ledger's, offered only where its page opens.
+  const { navigable } = useViewAccess()
+  const ledger = viewById('audit')
 
   return (
     <>
@@ -296,17 +308,23 @@ export function NotificationBell() {
             <h3 className="text-body font-medium text-foreground">
               {t('notifications.title')}
             </h3>
-            <label className="mt-2 flex cursor-pointer items-center gap-2 text-caption text-muted-foreground">
-              <Checkbox
-                checked={includeInternal}
-                onCheckedChange={(checked) =>
-                  setIncludeInternal(checked === true)
-                }
-              />
-              {t('notifications.includeInternal')}
-            </label>
+            {auditOnly ? null : (
+              <label className="mt-2 flex cursor-pointer items-center gap-2 text-caption text-muted-foreground">
+                <Checkbox
+                  checked={includeInternal}
+                  onCheckedChange={(checked) =>
+                    setIncludeInternal(checked === true)
+                  }
+                />
+                {t('notifications.includeInternal')}
+              </label>
+            )}
           </div>
-          {isLoading ? (
+          {auditOnly ? (
+            <p className="px-3 py-6 text-center text-body text-muted-foreground">
+              {t('notifications.auditOnly')}
+            </p>
+          ) : isLoading ? (
             <div className="flex justify-center py-6">
               <Spinner />
             </div>
@@ -350,17 +368,19 @@ export function NotificationBell() {
             </div>
           )}
           {/* The audit ledger holds the full record. */}
-          <div className="border-t border-border p-1">
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="w-full"
-              onClick={leave}
-            >
-              <Link to={'/audit' as never}>{t('notifications.viewAll')}</Link>
-            </Button>
-          </div>
+          {ledger && navigable(ledger) ? (
+            <div className="border-t border-border p-1">
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={leave}
+              >
+                <Link to={'/audit' as never}>{t('notifications.viewAll')}</Link>
+              </Button>
+            </div>
+          ) : null}
         </PopoverContent>
       </Popover>
       {denying ? (

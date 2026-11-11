@@ -143,6 +143,10 @@
     "expiredAt": "已过期 {{time}}",
     "approveOnce": "仅批准这一次",
     "approveForSession": "在本次会话中始终批准",
+    "allowances": "本次会话的授权",
+    "revokeAllowance": "撤销",
+    "sessionPolicy": "策略要求审核每个请求。",
+    "allowancesError": "无法读取或更新会话授权。",
     "approving": "正在批准…",
     "deny": "拒绝",
     "noMatch": "没有与搜索匹配的请求",
@@ -194,10 +198,11 @@
     "reasonHint": "供审查者参考的上下文（可选）。",
     "requiredApprovals": "所需审批数",
     "requiredApprovalsHint": "若有匹配的审批策略适用，则忽略此值 —— 以策略为准。",
-    "expiresInSeconds": "到期时间（秒）",
-    "escalateInSeconds": "升级时间（秒）",
     "submit": "提交请求",
-    "created": "审批请求已发起"
+    "created": "审批请求已发起",
+    "expiresIn": "到期时间",
+    "escalateIn": "升级时间",
+    "subjectFold": "适用对象（可选）"
   },
   "detail": {
     "title": "审批请求",
@@ -274,23 +279,20 @@
     "denyImplicit": "拒绝（隐含）",
     "requiredApprovals": "所需审批数",
     "requiredApprovalsHint": "0–64。留空或 0 使用引擎默认值，关键操作的默认值可能更高。",
-    "expiresInSeconds": "到期时间（秒）",
-    "expiresInSecondsHint": "0–31536000（0 = 永不）。",
-    "escalateInSeconds": "升级时间（秒）",
-    "escalateInSecondsHint": "0–31536000（0 = 永不）。",
     "countError": "请输入 0 到 {{max}} 之间的整数。",
     "matchAction": "匹配操作",
     "matchActionHint": "留空 = 匹配任意操作。",
     "matchSubjectKind": "匹配对象类别",
     "matchSubjectKindHint": "留空 = 匹配任意对象类别。",
-    "needsBusiness": "将风险等级或批准数量设为与该操作默认值不同的值需要 Business。关闭此策略即可保留已保存的内容。",
     "create": "创建策略",
     "save": "保存更改",
     "confirmCreateBody": "已启用的 ABAC 策略会立即进一步限制访问；已启用的审批策略会开始对匹配的操作要求人工审批。立即生效。",
     "confirmUpdateBody": "若已启用，更改将在授权路径／审批流程上立即生效。策略类别无法更改。",
     "created": "策略已创建",
     "updated": "策略已更新",
-    "credentialWarning": "这看起来像是一个凭据值。策略规则只承载引用和选择器 —— 绝不承载密钥。"
+    "credentialWarning": "这看起来像是一个凭据值。策略规则只承载引用和选择器 —— 绝不承载密钥。",
+    "expiresIn": "到期时间",
+    "escalateIn": "升级时间"
   },
   "policyRemove": {
     "title": "删除此策略？",
@@ -729,5 +731,15 @@
       "editor": "编辑者",
       "owner": "所有者"
     }
+  },
+  "durations": {
+    "none": "不限",
+    "h1": "1小时",
+    "h4": "4小时",
+    "h8": "8小时",
+    "h24": "24小时",
+    "d7": "7天",
+    "d30": "30天",
+    "seconds": "{{value}} 秒"
   }
 }

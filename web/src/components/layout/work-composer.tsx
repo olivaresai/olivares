@@ -18,6 +18,7 @@ import {
   useState,
   useSyncExternalStore,
   type KeyboardEvent,
+  type MutableRefObject,
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -39,7 +40,11 @@ import {
 import { usePermissionRestriction } from '@/features/agentops/permission-restriction'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { AttachButton, AttachmentTray } from '@/features/agentops/attachment-ui'
-import { imagesIn, useImageDraft } from '@/features/agentops/attachments'
+import {
+  imagesIn,
+  useImageDraft,
+  type DraftImage,
+} from '@/features/agentops/attachments'
 import { modelName } from '@/features/agentops/model-name'
 import { SessionMode, useAccessWords } from '@/features/sessions/session-meter'
 import { sessionsKeys } from '@/features/sessions/api'
@@ -47,6 +52,7 @@ import { ContextControls } from '@/features/sessions/context-controls'
 import { compactSession } from '@/features/sessions/compact-session'
 import { toolName } from '@/features/agentops/engine-tools'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import { useTurnInterrupt } from '@/features/agentops/turn-interrupt'
 import '@/features/agentops/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
 import { LaunchSpeedFields } from '@/features/agentops/launch-speed-fields'
@@ -65,7 +71,7 @@ import {
   useRunQueue,
 } from '@/features/agentops/run-queue'
 import { sendBlockedReason, sendTurn } from '@/features/agentops/session-turn'
-import type { RunDTO } from '@/features/agentops/types'
+import { BUILD_MODE, PLAN_MODE, type RunDTO } from '@/features/agentops/types'
 import { isWorkBound } from '@/features/agentops/work-fence'
 import { DictateButton } from '@/features/dictation/dictate-button'
 import { BackgroundTaskStrip } from '@/features/sessions/background-task-strip'
@@ -89,22 +95,29 @@ import {
   type SentTurn,
 } from '@/features/sessions/sent-turns'
 import type { WorkGroupId } from '@/features/sessions/session-groups'
+import { useClientSettings } from '@/features/settings/preferences'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import {
+  readPromptHistory,
   readSessionDraft,
+  rememberPrompt,
   sessionDraftKey,
   sessionDraftRefused,
   sessionDraftSnapshot,
+  stashDraft,
+  stashedDrafts,
   subscribeSessionDrafts,
+  unstashDraft,
   writeSessionDraft,
 } from '@/lib/session-drafts'
-import { resolveBinding } from '@/lib/keybindings/model'
+import { chordHint, resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import { useTenantLabel } from './tenant-label'
 import { SlashMenu } from './slash-menu'
 import { WorkComposerQueue } from './work-composer-queue'
+import { PlanToggle, StashButton, StopButton } from './work-composer-controls'
 import {
   commandLabel,
   filterCommands,
@@ -297,6 +310,9 @@ export function WorkComposer({
   useEffect(() => {
     if (inputId === COMPOSER_INPUT_ID) document.getElementById(inputId)?.focus()
   }, [inputId])
+  // The field of a composer that is replaced (below) leaves with its focus; the next
+  // one takes it only if the person was in the field, never from another control.
+  const fieldHadFocus = useRef(false)
   // Scope all local composer state at once, including an in-flight send's callbacks.
   return (
     <SessionComposer
@@ -310,6 +326,7 @@ export function WorkComposer({
       attached={attached}
       draftKey={draftKey}
       inputId={inputId}
+      fieldHadFocus={fieldHadFocus}
     />
   )
 }
@@ -319,11 +336,13 @@ function SessionComposer({
   attached,
   draftKey,
   inputId,
+  fieldHadFocus,
 }: {
   frame: ComposerFrame
   attached: ComposerAttached
   draftKey: string | null
   inputId: string
+  fieldHadFocus: MutableRefObject<boolean>
 }) {
   const { t } = useTranslation('nav')
   const sessionLaunch = {
@@ -382,6 +401,19 @@ function SessionComposer({
     turnRef.current = turn
   }, [turn])
   const fieldRef = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const field = fieldRef.current
+    if (fieldHadFocus.current && field) {
+      field.focus()
+      // The new field starts with its caret at the front; the person was at the end.
+      field.setSelectionRange(field.value.length, field.value.length)
+    }
+    fieldHadFocus.current = false
+    // React runs this before it removes the old field, so the focus is still readable.
+    return () => {
+      fieldHadFocus.current = document.activeElement === field
+    }
+  }, [fieldHadFocus])
   // The field grows with its text from 2 to 8 rows, then scrolls.
   useLayoutEffect(() => {
     const el = fieldRef.current
@@ -466,6 +498,7 @@ function SessionComposer({
       })
       if (payload.asWire) setWire('')
       else {
+        rememberPrompt(draftKey, payload.value)
         // The conversation shows the message now; the tool shows it when it takes the
         // turn, and then only its own row stays.
         // A slash command is answered by the tool, not shown as a message.
@@ -506,6 +539,7 @@ function SessionComposer({
   const queueRead = useRunQueue(attached.run, queueBound)
   const queue = queueRead.data
   const queueTurn = useQueueTurn(attached.run, (text) => {
+    rememberPrompt(draftKey, text)
     if (turnRef.current.trim() === text) changeTurn('')
   })
   const deciding = useRef(false)
@@ -530,7 +564,7 @@ function SessionComposer({
     setSlashActive(0)
     if (menuKeyOf(next) !== slashDismissed) setSlashDismissed(null)
   }
-  // While a send is pending the field is disabled and the list would only be a target
+  // While a send is pending the field is locked and the list would only be a target
   // for a click that rewrites the draft under it.
   const menuOpen =
     canWrite &&
@@ -862,6 +896,64 @@ function SessionComposer({
     sendMutation.mutate({ run: attached.run.run_ref, value, asWire: true })
   }
 
+  const sendKey = useClientSettings((s) => s.sendKey)
+  const sendWhileRunning = useClientSettings((s) => s.sendWhileRunning)
+  const turnInterrupt = useTurnInterrupt(attached.run)
+  const stashed = useSyncExternalStore(subscribeSessionDrafts, () =>
+    stashedDrafts(draftKey),
+  )
+
+  // ARROW UP in an empty field brings back the last prompt sent, again the one before;
+  // ARROW DOWN walks back toward empty. A recalled prompt of several lines keeps both
+  // keys for its caret, and an edited one is the person's own text again.
+  const recalled = useRef<number | null>(null)
+  function recall(key: 'ArrowUp' | 'ArrowDown'): boolean {
+    const history = readPromptHistory(draftKey)
+    const at = recalled.current
+    const showing = at !== null && history[at] === turn
+    if (key === 'ArrowUp') {
+      if (turn !== '' && (!showing || turn.includes('\n'))) return false
+      const next = showing ? at + 1 : 0
+      if (next >= history.length) return showing
+      recalled.current = next
+      changeTurn(history[next]!)
+      return true
+    }
+    if (!showing || turn.includes('\n')) return false
+    recalled.current = at === 0 ? null : at - 1
+    changeTurn(at === 0 ? '' : history[at - 1]!)
+    return true
+  }
+
+  // CTRL+S sets the draft aside, words and attachments together; in an empty field it
+  // brings the last one back.
+  function stashOrRestore() {
+    if (draftKey === null || sending) return
+    if (turn.trim() || images.images.length > 0) {
+      if (images.uploading) return
+      if (!stashDraft(draftKey, { text: turn, attachments: images.images }))
+        return
+      changeTurn('')
+      images.discard(images.ids)
+      return
+    }
+    const back = unstashDraft<DraftImage>(draftKey)
+    if (!back) return
+    changeTurn(back.text)
+    images.restore(back.attachments)
+  }
+
+  // PLAN FIRST is the session's plan permission mode, applied with the next message as
+  // the access picker applies any mode. Pressed again, it returns to the mode it left.
+  const buildBeforePlan = useRef<string | null>(null)
+  const effectiveMode = accessChoice ?? attached.run.permission_mode
+  const planning = effectiveMode === PLAN_MODE
+  function togglePlan() {
+    const left = planning ? (buildBeforePlan.current ?? BUILD_MODE) : PLAN_MODE
+    if (!planning) buildBeforePlan.current = effectiveMode || BUILD_MODE
+    setAccessChoice(left === attached.run.permission_mode ? null : left)
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter sends and Shift+Enter breaks a line (the binding table matches Enter alone);
     // a key that is choosing a character of an IME composition is not a send.
@@ -892,11 +984,31 @@ function SessionComposer({
         return
       }
     }
+    if (
+      plain &&
+      (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+      recall(e.key)
+    ) {
+      e.preventDefault()
+      return
+    }
     const command = resolveBinding(KEYBINDINGS, e, { launcherFocused: true })
+    if (command === 'launcher.stash') {
+      e.preventDefault()
+      stashOrRestore()
+      return
+    }
     if (command !== 'launcher.start' && command !== 'launcher.startBackground')
       return
+    // The person's choice (Settings › General): which key sends, and what it does while
+    // the tool works. With Ctrl+Enter chosen, a plain Enter breaks the line.
+    const withMod = command === 'launcher.startBackground'
+    if (sendKey === 'modEnter' && !withMod) return
     e.preventDefault()
-    void sendSentence(command === 'launcher.startBackground')
+    const primarySteers = sendWhileRunning === 'steer'
+    void sendSentence(
+      sendKey === 'modEnter' ? primarySteers : withMod !== primarySteers,
+    )
   }
 
   const attachedWorkspace = workspaces.find(
@@ -1031,15 +1143,35 @@ function SessionComposer({
       : null)
   // The field teaches what can be typed: the pane header names the session.
   // While the tool works the field says what Enter does.
-  const placeholder =
-    blockedText ??
-    (queue?.hold === 'turn'
-      ? t(
+  // The keys it names are the person's choice (Settings › General).
+  const mod = chordHint('Mod+Enter')
+  const primaryKey = sendKey === 'modEnter' ? mod : 'Enter'
+  const otherKey = sendKey === 'modEnter' ? null : mod
+  const queueKey = sendWhileRunning === 'steer' ? otherKey : primaryKey
+  const steerKey = sendWhileRunning === 'steer' ? primaryKey : otherKey
+  const customKeys = sendKey !== 'enter' || sendWhileRunning !== 'queue'
+  const whileWorking = !queue
+    ? ''
+    : customKeys
+      ? [
+          queueKey
+            ? t('nav:launcher.queue.placeholderQueueKey', { key: queueKey })
+            : '',
+          steerKey && queue.can_steer
+            ? t('nav:launcher.queue.placeholderSteerKey', { key: steerKey })
+            : '',
+        ]
+          .filter(Boolean)
+          .join('; ')
+      : t(
           queue.can_steer
             ? 'nav:launcher.queue.placeholderSteer'
             : 'nav:launcher.queue.placeholder',
         )
-      : t('nav:launcher.askPlaceholder'))
+  const placeholder =
+    blockedText ??
+    ((queue?.hold === 'turn' && whileWorking) ||
+      t('nav:launcher.askPlaceholder'))
   const card = (
     <div
       data-testid="work-composer"
@@ -1133,7 +1265,10 @@ function SessionComposer({
             : undefined
         }
         data-testid="launcher-input"
-        disabled={(!runLive && !waitingApproval) || sending}
+        disabled={!runLive && !waitingApproval}
+        // A pending send locks the message in the field without taking focus from it: a
+        // disabled field is blurred by the browser and nothing would give focus back.
+        readOnly={sending}
         className="max-h-48 min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body-l text-text outline-none placeholder:text-text-3 disabled:cursor-not-allowed"
       />
       {/* The row wraps on a narrow screen: the buttons move below, the pickers keep their words. */}
@@ -1367,6 +1502,20 @@ function SessionComposer({
             </div>
           </PopoverContent>
         </Popover>
+        <PlanToggle
+          planning={planning}
+          disabled={
+            !runLive ||
+            sending ||
+            isWorkBound(attached.run) ||
+            (planning
+              ? attached.run.permission_mode === PLAN_MODE &&
+                !accessRestriction.allows(PERMISSION_NAME.editsAndCommands)
+              : !accessRestriction.allows(PERMISSION_NAME.readOnly))
+          }
+          reason={accessRestriction.reason}
+          onToggle={togglePlan}
+        />
         {/* THE RAW LINE IS A DEVELOPER'S TOOL: one NDJSON line to the tool's stdin. A
             production console does not show it (the CLI and the API keep it), and it
             carries its own name, not "Advanced". */}
@@ -1411,7 +1560,7 @@ function SessionComposer({
             </div>
           </AdvancedDisclosure>
         ) : null}
-        {/* SEND IS A 32 px ROUND ICON: orange only while there is something to send (the
+        {/* SEND IS A 34 px ROUND ICON: orange only while there is something to send (the
             one primary action of the thread), a quiet ghost otherwise. It is never
             dashed: a control that cannot act says so by being quiet, and why in its
             name. */}
@@ -1431,6 +1580,14 @@ function SessionComposer({
               })
             }}
           />
+          <StashButton
+            hasDraft={hasText || images.images.length > 0}
+            stashed={stashed}
+            disabled={
+              !runLive || sending || images.uploading || draftKey === null
+            }
+            onClick={stashOrRestore}
+          />
           <AttachButton
             disabled={!runLive || !!approvalId || sending}
             onFiles={images.add}
@@ -1440,6 +1597,7 @@ function SessionComposer({
             field={fieldRef}
             onText={(text) => changeTurn(joinDictation(turnRef.current, text))}
           />
+          <StopButton turn={turnInterrupt} />
           <Button
             type="button"
             variant={
@@ -1461,7 +1619,7 @@ function SessionComposer({
             title={
               sendReason
                 ? t(`agentops:${sendReason}`)
-                : `${approvalId ? t('sessions:approval.declineSend') : t('nav:launcher.send')} ⏎`
+                : `${approvalId ? t('sessions:approval.declineSend') : t('nav:launcher.send')} ${sendKey === 'modEnter' ? mod : '⏎'}`
             }
             onClick={() => void sendSentence()}
             data-testid="composer-send"

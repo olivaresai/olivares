@@ -29,6 +29,66 @@ describe('EmptyState', () => {
     expect(screen.getByRole('button', { name: 'New route' })).toBeTruthy()
   })
 
+  it('shows the product’s face: the four-row mark at 64 px, a real title and the action as a pill', () => {
+    render(
+      <EmptyState
+        icon={<svg data-testid="place-icon" />}
+        title="No sessions yet"
+        description="A session runs an AI tool in one of your folders."
+        action={<Button>New session</Button>}
+      />,
+    )
+    const state = screen.getByRole('status')
+    // Its words keep the drawing's 480 px measure, centred.
+    expect(state).toHaveClass('mx-auto', 'max-w-120')
+    // The mark is BrandMark (its own view box), never the place icon and never a second drawing.
+    const mark = state.querySelector('[data-slot="state-mark"] svg')
+    expect(mark?.getAttribute('viewBox')).toBe('3.5 2 28 28')
+    expect(mark).toHaveClass('size-16')
+    expect(mark?.querySelectorAll('path')).toHaveLength(5)
+    expect(screen.queryByTestId('place-icon')).toBeNull()
+    expect(screen.getByText('No sessions yet')).toHaveClass(
+      'text-[1.375rem]/7',
+      'font-extrabold',
+      'text-text',
+    )
+    expect(
+      screen.getByText('A session runs an AI tool in one of your folders.'),
+    ).toHaveClass('text-body-l', 'text-text-2')
+    const button = screen.getByRole('button', { name: 'New session' })
+    expect(button.parentElement).toHaveClass('*:rounded-full')
+  })
+
+  it('in a side panel, a sheet, a card or a table body, is the same page made small', () => {
+    render(
+      <EmptyState
+        size="panel"
+        title="No revisions yet"
+        description="Each saved change appears here."
+        action={<Button>New revision</Button>}
+      />,
+    )
+    const state = screen.getByRole('status')
+    expect(state).toHaveClass('py-8')
+    expect(state).not.toHaveClass('pt-26')
+    // The same face, at 40 px.
+    const mark = state.querySelector('[data-slot="state-mark"] svg')
+    expect(mark?.getAttribute('viewBox')).toBe('3.5 2 28 28')
+    expect(mark).toHaveClass('size-10')
+    expect(mark).not.toHaveClass('size-16')
+    const title = screen.getByText('No revisions yet')
+    expect(title).toHaveClass('text-heading', 'font-extrabold')
+    expect(title).not.toHaveClass('text-[1.375rem]/7')
+    // Everything else as the page: the sentence and the pill.
+    expect(screen.getByText('Each saved change appears here.')).toHaveClass(
+      'text-body-l',
+      'text-text-2',
+    )
+    expect(
+      screen.getByRole('button', { name: 'New revision' }).parentElement,
+    ).toHaveClass('*:rounded-full')
+  })
+
   it('is one quiet line, with no panel and no control, when nothing is owed', () => {
     render(
       <EmptyState

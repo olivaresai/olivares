@@ -370,18 +370,28 @@
       "placeholder": "Enter додає повідомлення в чергу після цього ходу",
       "placeholderSteer": "Enter додає в чергу після цього ходу, Ctrl+Enter спрямовує одразу",
       "discarded": "Сесію звільнено, а ці повідомлення залишилися в черзі:",
-      "copy": "Копіювати"
-    }
+      "copy": "Копіювати",
+      "placeholderQueueKey": "{{key}} додає повідомлення в чергу після цього ходу",
+      "placeholderSteerKey": "{{key}} спрямовує одразу"
+    },
+    "stash": "Відкласти чернетку",
+    "stashRestore": "Повернути відкладену чернетку",
+    "plan": "План",
+    "planHint": "Спершу план: інструмент читає й пропонує план, нічого не змінюючи. Діє з наступного повідомлення."
   },
   "shell": {
     "more": "Більше",
     "searchCommands": "Пошук і команди",
     "search": "Пошук",
+    "searchGo": "Пошук або перехід…",
     "stopAll": "Зупинити все",
     "workspaceCount": "Робочі простори: {{count}}",
     "rail": {
       "title": "Сесії",
-      "all": "Усі",
+      "seeAll_one": "Показати {{count}} сесію",
+      "seeAll_few": "Показати всі {{count}} сесії",
+      "seeAll_many": "Показати всі {{count}} сесій",
+      "seeAll_other": "Показати всі {{count}} сесії",
       "groups": {
         "needsYou": "Потрібні ви",
         "working": "Виконується",
@@ -431,11 +441,11 @@
     "killswitch": {
       "estateStopped": "ВСІХ АГЕНТІВ ЗУПИНЕНО",
       "estateBody": "Агенти не можуть діяти, доки два облікові записи користувачів не затвердять повторний запуск.",
-      "agentStops": "{{count}} зупинок агента активні",
-      "agentStops_one": "{{count}} зупинка агента активна",
-      "agentStops_few": "{{count}} зупинки агента активні",
-      "agentStops_many": "{{count}} зупинок агента активні",
-      "agentStops_other": "{{count}} зупинки агента активні",
+      "agentStops": "{{count}} агента зупинено",
+      "agentStops_one": "{{count}} агент зупинений",
+      "agentStops_few": "{{count}} агенти зупинені",
+      "agentStops_many": "{{count}} агентів зупинено",
+      "agentStops_other": "{{count}} агента зупинено",
       "none": "Нічого не зупинено. Сесії та агенти працюють у звичайному режимі."
     },
     "status": {
@@ -444,6 +454,10 @@
       "running_few": "{{count}} сесії відкриті",
       "running_many": "{{count}} сесій відкрито",
       "running_other": "{{count}} сесії відкрито",
+      "needYou_one": "{{count}} чекає на вас",
+      "needYou_few": "{{count}} чекають на вас",
+      "needYou_many": "{{count}} чекають на вас",
+      "needYou_other": "{{count}} чекають на вас",
       "usage": "Використання {{tool}}",
       "fiveHour": "5 год",
       "week": "тиж.",
@@ -454,7 +468,6 @@
     },
     "collapse": "Згорнути навігацію",
     "expand": "Розгорнути навігацію",
-    "openNavigation": "Відкрити навігацію",
     "closeNavigation": "Закрити навігацію"
   },
   "places": {
@@ -480,6 +493,10 @@
     "securityRedTeam": "Прогони red team та оцінювання",
     "operationsDeploy": "Розгортання агентів на інших хостах",
     "operationsResidency": "Розміщення даних та орендарі",
-    "retentionSchedules": "Графіки застосовуються лише в Olivares Business: ця редакція зберігає їх і нічого не очищає."
+    "retentionSchedules": "Графіки застосовуються лише в Olivares AI Business: ця редакція зберігає їх і нічого не очищає."
+  },
+  "groups": {
+    "control": "Управління",
+    "admin": "Адміністрування"
   }
 }

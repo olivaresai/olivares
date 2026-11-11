@@ -10,6 +10,19 @@
     "unavailableDescription": "The sessions read did not answer. The estate figures above are unaffected.",
     "untitled": "Untitled session"
   },
+  "folders": {
+    "title": "Your folders",
+    "start": "Start",
+    "startIn": "Start in {{folder}}",
+    "canWork": "Can work",
+    "readOnly": "Read only",
+    "showAll": "Show all folders ({{total}})",
+    "loading": "Loading your folders",
+    "emptyTitle": "You have no folders yet",
+    "emptyDescription": "When your administrator gives you access to a folder, it will show here.",
+    "unavailableTitle": "Couldn’t load your folders",
+    "unavailableDescription": "Your sessions below are not affected."
+  },
   "empty": {
     "title": "Nothing to show yet",
     "description": "Your role doesn't grant read access to any estate module. Ask an administrator for a read grant to see the overview."

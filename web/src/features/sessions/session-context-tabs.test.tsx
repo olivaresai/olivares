@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SIDE PANE HAS TABS: Changes, Files, Terminal, Preview, Details, Activity (Claude Code and
+// THE SIDE PANE HAS TABS: Changes, Files, Preview, Details, Activity (Claude Code and
 // Codex), then whatever a build registers.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
@@ -71,12 +71,6 @@ vi.mock('@/features/agentops/workspace-browser', () => ({
       </div>
     )
   },
-}))
-// The terminal has its own tests; here it only has to be the thing the Terminal tab shows.
-vi.mock('./session-terminal', () => ({
-  SessionTerminal: ({ workspaceRef }: { workspaceRef: string }) => (
-    <div data-testid="terminal-tab">{workspaceRef}</div>
-  ),
 }))
 vi.mock('./session-changes', () => ({
   SessionChanges: () => <div data-testid="changes-block" />,
@@ -220,16 +214,10 @@ const tabs = () =>
     .map((r) => r.textContent)
 
 describe('the side pane tabs', () => {
-  it('shows Context, Changes, Files, Preview and Terminal, and nothing else when no build registers a panel', async () => {
+  it('shows Context, Changes, Files and Preview, and nothing else when no build registers a panel', async () => {
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
     // Context is the one in front: the scope and the references, not the changes.
     expect(screen.getByTestId('context-details')).toBeInTheDocument()
     expect(screen.queryByTestId('changes-block')).toBeNull()
@@ -267,13 +255,7 @@ describe('the side pane tabs', () => {
     registered.panels = undefined
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
   })
 
   it('shows a registered panel after the pane’s own, and renders it for the session on screen', async () => {
@@ -290,16 +272,9 @@ describe('the side pane tabs', () => {
     ]
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-      'Files',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details', 'Files'])
     const radios = screen.getAllByRole('radio')
-    await user.click(radios[5]!)
+    await user.click(radios[4]!)
     expect(await screen.findByTestId('git-panel')).toHaveTextContent(
       'git for run-1',
     )
@@ -319,13 +294,7 @@ describe('the side pane tabs', () => {
     auth.can = (p) => p !== 'admin.shell'
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
   })
 
   it('Changes shows what the session changed, and moves the scope out of the way', async () => {
@@ -387,71 +356,6 @@ describe('the side pane tabs', () => {
     )
     await user.click(screen.getByRole('radio', { name: 'Details' }))
     expect(screen.queryByRole('heading', { name: 'Git' })).toBeNull()
-  })
-
-  it('Terminal opens in the session’s own folder', async () => {
-    renderPane({ panel: 'terminal' })
-    expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
-      'ws-main',
-    )
-  })
-
-  it('keeps the tab bar out of the part that scrolls, and lets the tab fill the height under it', async () => {
-    renderPane({ panel: 'terminal' })
-    const terminal = await screen.findByTestId('terminal-tab')
-    const body = screen.getByTestId('session-pane-body')
-    // The tab is a flex child of a body that fills the pane and scrolls on its own...
-    expect(body).toContainElement(terminal)
-    expect(body).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto')
-    // ...and the bar is not in it, so switching tabs never moves the bar.
-    const bar = document.querySelector('[data-slot="pane-tabs"]')
-    expect(bar).not.toBeNull()
-    expect(body).not.toContainElement(bar as HTMLElement)
-  })
-
-  it('offers no Terminal to a person without the right to write the folder', async () => {
-    auth.can = (p) => p !== 'sessions:workspace:write'
-    renderPane()
-    await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
-  })
-
-  it('opens the Terminal of the registered worktree, never the original checkout', async () => {
-    ops.listWorkspaces.mockResolvedValue({
-      items: [
-        {
-          workspace_ref: 'ws-worktree',
-          root_path: '/worktrees/a',
-          state: 'active',
-          mount_mode: 'rw',
-        },
-      ],
-      has_more: false,
-    })
-    renderPane({
-      panel: 'terminal',
-      resolution: resolution([
-        {
-          ...RUN,
-          workspace_path: '/worktrees/a',
-          worktree_branch: 'session/a',
-        },
-      ]),
-    })
-    expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
-      'ws-worktree',
-    )
-  })
-
-  it('hides folder panes and opens Details for a folderless terminal link', async () => {
-    renderPane({
-      panel: 'terminal',
-      resolution: resolution([{ ...RUN, workspace_ref: undefined }]),
-    })
-    expect(await screen.findByTestId('context-details')).toBeInTheDocument()
-    for (const name of ['Changes', 'Files', 'Terminal'])
-      expect(screen.queryByRole('radio', { name })).toBeNull()
-    expect(screen.queryByTestId('terminal-tab')).toBeNull()
   })
 
   it('Files opens the workspace browser on the session’s own folder', async () => {
@@ -537,7 +441,7 @@ describe('the side pane tabs', () => {
     await screen.findByTestId('session-context')
     const radios = screen.getAllByRole('radio')
     for (let round = 0; round < 2; round++) {
-      await user.click(radios[5]!)
+      await user.click(radios[4]!)
       await user.click(await screen.findByTestId('counter'))
       expect(screen.getByTestId('counter')).toHaveTextContent('run-1 1')
       await user.click(radios[0]!)
@@ -560,7 +464,7 @@ describe('the side pane tabs', () => {
       },
     ]
     renderPane()
-    await user.click((await screen.findAllByRole('radio'))[5]!)
+    await user.click((await screen.findAllByRole('radio'))[4]!)
     await waitFor(() => expect(seen).toBeDefined())
     expect(seen).toEqual({
       ref: 'run-1',
@@ -593,7 +497,6 @@ describe('the side pane tabs', () => {
       expect(tabs()).toEqual([
         'Changes',
         'Files',
-        'Terminal',
         'Preview',
         'Details',
         'Activity',
@@ -627,17 +530,11 @@ describe('the side pane tabs', () => {
       resolution: resolution([{ ...RUN, provider_driver: 'opencode' }]),
     })
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
     expect(ops.activity).not.toHaveBeenCalled()
   })
 
-  it('ignores a registrant that takes the id of Context, Activity, Changes, Files, Preview or Terminal', async () => {
+  it('ignores a registrant that takes the id of Context, Activity, Changes, Files, Preview or the retired Terminal tab', async () => {
     registered.panels = [
       'context',
       'activity',
@@ -653,13 +550,7 @@ describe('the side pane tabs', () => {
     }))
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
     expect(screen.queryByText('takeover')).toBeNull()
   })
 })
@@ -686,23 +577,20 @@ describe('the side pane tabs at the pane’s own width', () => {
   }
 
   it('shows the tabs that fit and puts the rest under More, never squeezed', async () => {
-    layout(272)
+    layout(240)
     try {
       const user = userEvent.setup()
       renderPane()
       await screen.findByTestId('session-context')
-      // 72 + 72 + 56 px of tabs and 28 px of More fit in 272; Terminal would not.
+      // 72 + 56 + 72 px of tabs and 28 px of More fit in 240; Preview would not.
       expect(tabs()).toEqual(['Changes', 'Files', 'Details'])
       await user.click(screen.getByRole('button', { name: 'More panels' }))
       const hidden = screen.getAllByRole('menuitemradio')
-      expect(hidden.map((i) => i.textContent)).toEqual(['Terminal', 'Preview'])
+      expect(hidden.map((i) => i.textContent)).toEqual(['Preview'])
       await user.click(hidden[0]!)
       // The tab in front always shows, in the strip.
-      expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
-        'ws-main',
-      )
-      expect(tabs()).toContain('Terminal')
-      expect(screen.getByRole('radio', { name: 'Terminal' })).toBeChecked()
+      expect(tabs()).toContain('Preview')
+      expect(screen.getByRole('radio', { name: 'Preview' })).toBeChecked()
     } finally {
       vi.restoreAllMocks()
     }
@@ -713,13 +601,7 @@ describe('the side pane tabs at the pane’s own width', () => {
     try {
       renderPane()
       await screen.findByTestId('session-context')
-      expect(tabs()).toEqual([
-        'Changes',
-        'Files',
-        'Terminal',
-        'Preview',
-        'Details',
-      ])
+      expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
       expect(screen.queryByRole('button', { name: 'More panels' })).toBeNull()
     } finally {
       vi.restoreAllMocks()

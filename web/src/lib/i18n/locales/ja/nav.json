@@ -370,18 +370,25 @@
       "placeholder": "Enter でこのターンの後に送るメッセージとして待機させます",
       "placeholderSteer": "Enter でこのターンの後に待機、Ctrl+Enter で今すぐ割り込ませます",
       "discarded": "次のメッセージが待機中のまま、セッションが解放されました:",
-      "copy": "コピー"
-    }
+      "copy": "コピー",
+      "placeholderQueueKey": "{{key}} でこのターンの後に待機",
+      "placeholderSteerKey": "{{key}} で今すぐ割り込ませます"
+    },
+    "stash": "この下書きを退避",
+    "stashRestore": "退避した下書きを戻す",
+    "plan": "プラン",
+    "planHint": "まずプラン: ツールは読み取りとプランの提案だけを行い、何も変更しません。次のメッセージから適用されます。"
   },
   "shell": {
     "more": "その他",
     "searchCommands": "検索とコマンド",
     "search": "検索",
+    "searchGo": "検索または移動…",
     "stopAll": "すべて停止",
     "workspaceCount": "ワークスペース: {{count}}",
     "rail": {
       "title": "セッション",
-      "all": "すべて",
+      "seeAll_other": "{{count}} 件のセッションをすべて表示",
       "groups": {
         "needsYou": "対応が必要",
         "working": "実行中",
@@ -431,13 +438,14 @@
     "killswitch": {
       "estateStopped": "すべてのエージェントを停止中",
       "estateBody": "2 つのユーザーアカウントが再開を承認するまで、エージェントは操作できません。",
-      "agentStops": "{{count}} 件のエージェント停止がアクティブ",
-      "agentStops_other": "{{count}} 件のエージェント停止がアクティブ",
+      "agentStops": "{{count}} 個のエージェント停止中",
+      "agentStops_other": "{{count}} 個のエージェント停止中",
       "none": "停止しているものはありません。セッションとエージェントは通常どおり動作しています。"
     },
     "status": {
       "label": "ステータス",
       "running_other": "開いているセッション {{count}} 件",
+      "needYou_other": "対応が必要 {{count}} 件",
       "usage": "{{tool}} の使用量",
       "fiveHour": "5時間",
       "week": "週",
@@ -448,7 +456,6 @@
     },
     "collapse": "ナビゲーションを折りたたむ",
     "expand": "ナビゲーションを展開",
-    "openNavigation": "ナビゲーションを開く",
     "closeNavigation": "ナビゲーションを閉じる"
   },
   "places": {
@@ -474,6 +481,10 @@
     "securityRedTeam": "レッドチームの実行と採点",
     "operationsDeploy": "エージェントを他のホストへデプロイ",
     "operationsResidency": "データレジデンシーとテナント",
-    "retentionSchedules": "保持スケジュールは Olivares Business でのみ適用されます。このエディションは保存するだけで、何もパージしません。"
+    "retentionSchedules": "保持スケジュールは Olivares AI Business でのみ適用されます。このエディションは保存するだけで、何もパージしません。"
+  },
+  "groups": {
+    "control": "ガバナンス",
+    "admin": "管理"
   }
 }

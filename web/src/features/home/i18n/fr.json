@@ -10,6 +10,19 @@
     "unavailableDescription": "La lecture des sessions n’a pas répondu. Les chiffres ci-dessus ne sont pas affectés.",
     "untitled": "Session sans titre"
   },
+  "folders": {
+    "title": "Vos dossiers",
+    "start": "Commencer",
+    "startIn": "Commencer dans {{folder}}",
+    "canWork": "Vous pouvez travailler",
+    "readOnly": "Lecture seule",
+    "showAll": "Afficher tous les dossiers ({{total}})",
+    "loading": "Chargement de vos dossiers",
+    "emptyTitle": "Vous n’avez encore aucun dossier",
+    "emptyDescription": "Quand votre administrateur vous donnera accès à un dossier, il apparaîtra ici.",
+    "unavailableTitle": "Impossible de charger vos dossiers",
+    "unavailableDescription": "Vos sessions ci-dessous ne sont pas concernées."
+  },
   "empty": {
     "title": "Rien à afficher pour l’instant",
     "description": "Votre rôle n’accorde aucun accès en lecture à un module du parc. Demandez à un administrateur un octroi en lecture pour voir la vue d’ensemble."

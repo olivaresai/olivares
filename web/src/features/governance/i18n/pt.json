@@ -145,6 +145,10 @@
     "expiredAt": "Expirou {{time}}",
     "approveOnce": "Aprovar uma vez",
     "approveForSession": "Aprovar para esta sessão",
+    "allowances": "Permissões desta sessão",
+    "revokeAllowance": "Revogar",
+    "sessionPolicy": "A política exige a revisão de cada pedido.",
+    "allowancesError": "Não foi possível ler ou atualizar as permissões da sessão.",
     "approving": "A aprovar…",
     "deny": "Negar",
     "noMatch": "Nenhum pedido corresponde à pesquisa",
@@ -196,10 +200,11 @@
     "reasonHint": "Contexto para os revisores (opcional).",
     "requiredApprovals": "Aprovações necessárias",
     "requiredApprovalsHint": "Ignorado se se aplicar uma política de aprovação correspondente — a política é que vale.",
-    "expiresInSeconds": "Expira em (segundos)",
-    "escalateInSeconds": "Escala em (segundos)",
     "submit": "Enviar pedido",
-    "created": "Pedido de aprovação aberto"
+    "created": "Pedido de aprovação aberto",
+    "expiresIn": "Expira em",
+    "escalateIn": "Escala em",
+    "subjectFold": "A que se aplica (opcional)"
   },
   "detail": {
     "title": "Pedido de aprovação",
@@ -278,23 +283,20 @@
     "denyImplicit": "Negar (implícito)",
     "requiredApprovals": "Aprovações necessárias",
     "requiredApprovalsHint": "0 a 64. Vazio ou 0 usa a predefinição do motor, que pode ser mais alta para ações críticas.",
-    "expiresInSeconds": "Expira em (segundos)",
-    "expiresInSecondsHint": "0–31536000 (0 = nunca).",
-    "escalateInSeconds": "Escala em (segundos)",
-    "escalateInSecondsHint": "0–31536000 (0 = nunca).",
     "countError": "Introduza um número inteiro de 0 a {{max}}.",
     "matchAction": "Ação correspondente",
     "matchActionHint": "Vazio = corresponde a qualquer ação.",
     "matchSubjectKind": "Tipo de alvo correspondente",
     "matchSubjectKindHint": "Vazio = corresponde a qualquer tipo de alvo.",
-    "needsBusiness": "Um nível de risco ou um número de aprovações diferente do predefinido da ação precisa do Business. Desative esta política para a manter guardada.",
     "create": "Criar política",
     "save": "Guardar alterações",
     "confirmCreateBody": "Uma política ABAC ativada restringe o acesso de imediato; uma política de aprovação ativada passa a exigir aprovações humanas para as ações correspondentes. Produz efeito de imediato.",
     "confirmUpdateBody": "Se estiver ativada, a alteração produz efeito de imediato no caminho de autorização / fluxo de aprovação. O tipo de política não pode ser alterado.",
     "created": "Política criada",
     "updated": "Política atualizada",
-    "credentialWarning": "Isto parece um valor de credencial. As regras de política só contêm referências e seletores — nunca um segredo."
+    "credentialWarning": "Isto parece um valor de credencial. As regras de política só contêm referências e seletores — nunca um segredo.",
+    "expiresIn": "Expira em",
+    "escalateIn": "Escala em"
   },
   "policyRemove": {
     "title": "Eliminar esta política?",
@@ -735,5 +737,15 @@
       "editor": "Editor",
       "owner": "Proprietário"
     }
+  },
+  "durations": {
+    "none": "Sem limite",
+    "h1": "1 hora",
+    "h4": "4 horas",
+    "h8": "8 horas",
+    "h24": "24 horas",
+    "d7": "7 dias",
+    "d30": "30 dias",
+    "seconds": "{{value}} segundos"
   }
 }

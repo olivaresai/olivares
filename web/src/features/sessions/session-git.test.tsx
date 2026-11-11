@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentOpsApi } from '@/features/agentops/api'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { SessionGit } from './session-git'
 
@@ -214,6 +214,12 @@ describe('Session Git', () => {
       await screen.findByRole('button', { name: 'Stage README.md' }),
     ).toBeDisabled()
     expect(screen.getByLabelText('Branch')).toBeDisabled()
+    // The panel's read-only sentence is Commit's reason, said once.
+    expect(
+      screen.getByRole('button', { name: 'Commit' }),
+    ).toHaveAccessibleDescription(
+      'Git changes are unavailable with this session’s permissions.',
+    )
     expect(agentOpsApi.gitAction).not.toHaveBeenCalled()
   })
   it('shows unavailable and status errors explicitly', async () => {
@@ -243,6 +249,57 @@ describe('Session Git', () => {
     expect(
       screen.queryByRole('button', { name: 'Stage README.md' }),
     ).not.toBeInTheDocument()
+  })
+  it('asks for the Git list again when a turn ends', async () => {
+    const { client, rerender } = show({ ...run, state: 'running' })
+    await screen.findByLabelText('Branch')
+    expect(agentOpsApi.gitStatus).toHaveBeenCalledTimes(1)
+    // The engine shows a session that answered its turn and waits for the person as idle.
+    rerender(
+      <QueryClientProvider client={client}>
+        <SessionGit run={{ ...run, state: 'idle' }} />
+      </QueryClientProvider>,
+    )
+    // Well inside the 5 s poll: only the end of the turn can ask.
+    await waitFor(() => expect(agentOpsApi.gitStatus).toHaveBeenCalledTimes(2))
+  })
+  it('marks the uncommitted changes to be read again when a turn ends', async () => {
+    const { client, rerender } = show({ ...run, state: 'running' })
+    await screen.findByLabelText('Branch')
+    const diff = agentOpsKeys.runWorktreeDiff('t1', run.run_ref)
+    client.setQueryData(diff, { files: [{ path: 'README.md' }] })
+    rerender(
+      <QueryClientProvider client={client}>
+        <SessionGit run={{ ...run, state: 'idle' }} />
+      </QueryClientProvider>,
+    )
+    // A list read before the turn ended may hold files the turn has since committed.
+    await waitFor(() =>
+      expect(client.getQueryState(diff)?.isInvalidated).toBe(true),
+    )
+  })
+  it('with nothing staged, Commit is disabled and says why', async () => {
+    vi.mocked(agentOpsApi.gitStatus)
+      .mockResolvedValueOnce(status)
+      .mockResolvedValue({
+        ...status,
+        files: [{ path: 'README.md', index: 'M', worktree: ' ' }],
+      })
+    const user = userEvent.setup()
+    show()
+    const commit = () => screen.getByRole('button', { name: 'Commit' })
+    await screen.findByRole('button', { name: 'Stage README.md' })
+    expect(commit()).toBeDisabled()
+    expect(commit()).toHaveAccessibleDescription(
+      'Nothing is staged yet. Stage a file to commit it.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Stage README.md' }))
+    await waitFor(() =>
+      expect(commit()).toHaveAccessibleDescription('Write a commit message.'),
+    )
+    await user.type(screen.getByLabelText('Commit message'), 'Explain it')
+    expect(commit()).toBeEnabled()
+    expect(commit()).not.toHaveAccessibleDescription()
   })
   it('honors the server folder policy even for a console writer', async () => {
     vi.mocked(agentOpsApi.gitStatus).mockResolvedValue({

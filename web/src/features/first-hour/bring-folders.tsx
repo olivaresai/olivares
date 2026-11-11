@@ -45,9 +45,12 @@ interface Outcome {
 export function BringFolders({
   onSkip,
   titled = true,
+  quiet = false,
 }: {
   onSkip?: () => void
   titled?: boolean
+  /** The host screen has another next step (the composer): confirming is secondary. */
+  quiet?: boolean
 }) {
   const { t } = useTranslation('firstHour')
   const boundary = useAuthBoundary()
@@ -91,11 +94,13 @@ export function BringFolders({
           await ensureFolder(path, { tenant: boundary.tenant, ...authority })
           settled.current.set(path, null)
         } catch (err) {
-          // A missing step-up or right is the privileged mutation's to report, and a
-          // retry resumes where this one stopped. Any other refusal is this folder's.
+          // A missing step-up, right or edition is the privileged mutation's to report,
+          // and a retry resumes where this one stopped. Any other refusal is this folder's.
           if (
             err instanceof ApiError &&
-            (err.isStepUpRequired || err.isForbidden || err.isUnauthenticated)
+            (err.isStepUpRequired ||
+              err.isForbiddenOrEdition ||
+              err.isUnauthenticated)
           )
             throw err
           settled.current.set(path, failureText(err) ?? t('bring.failed'))
@@ -126,7 +131,7 @@ export function BringFolders({
     onDone: setOutcomes,
   })
 
-  if (query.isLoading) return <Spinner className="size-4" />
+  if (query.isLoading) return quiet ? null : <Spinner className="size-4" />
   if (query.isError)
     return (
       <QueryErrorState
@@ -210,7 +215,7 @@ export function BringFolders({
       {!outcomes && (
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant="primary"
+            variant={quiet ? 'secondary' : 'primary'}
             size="sm"
             disabled={paths.length === 0 || register.isPending}
             onClick={() => register.mutate(paths)}
@@ -254,7 +259,7 @@ const SKIPPED_KEY = 'olivares.bring-folders.skipped'
 
 /** The wizard's offer. It is shown to a person who may register folders until they skip
  * it on this browser; the folders page offers it again whenever they want. */
-export function BringFoldersStep() {
+export function BringFoldersStep({ quiet = false }: { quiet?: boolean }) {
   const { can } = useAuth()
   const [skipped, setSkipped] = useState<boolean>(() => {
     try {
@@ -266,6 +271,7 @@ export function BringFoldersStep() {
   if (skipped || !can('sessions:workspace:admin')) return null
   return (
     <BringFolders
+      quiet={quiet}
       onSkip={() => {
         try {
           preferenceStorage.setItem(SKIPPED_KEY, 'true')

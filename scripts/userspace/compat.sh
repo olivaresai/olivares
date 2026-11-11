@@ -52,9 +52,19 @@ echo "Release version: $version; published baseline: $tag"
 assets="$USERSPACE_OUT/published-assets"
 mkdir -m 700 "$assets"
 archive="olivares_${tag}_linux_amd64.tar.gz"
+fetch() { curl --fail --silent --show-error --location --retry 3 --max-time 90 "$@"; }
 for name in "$archive" checksums.txt checksums.txt.sig checksums.txt.pem release-commit.txt; do
-	curl --fail --location --retry 2 --max-time 90 \
-		"https://github.com/olivaresai/olivares/releases/download/$tag/$name" -o "$assets/$name"
+	url="https://github.com/olivaresai/olivares/releases/download/$tag/$name"
+	if ! fetch "$url" -o "$assets/$name"; then
+		# github.com's release-download front answered 504 for hours on 2026-11-08 and 2026-11-09 while the
+		# release API served the same asset. Only the source changes: the signature and digest checks below
+		# still decide what is trusted.
+		api="https://api.github.com/repos/olivaresai/olivares/releases/tags/$tag"
+		echo "compat.sh: $url failed; fetching the same asset through $api" >&2
+		asset="$(fetch "$api" | jq -er --arg name "$name" '.assets[] | select(.name == $name) | .url')" &&
+			fetch -H 'Accept: application/octet-stream' "$asset" -o "$assets/$name" ||
+			{ echo "compat.sh: $name of $tag is available neither from $url nor from the release API" >&2; exit 1; }
+	fi
 done
 bash scripts/cosign-verified.sh verify-blob \
 	--certificate "$assets/checksums.txt.pem" --signature "$assets/checksums.txt.sig" \

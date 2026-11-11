@@ -136,6 +136,11 @@ func (a *Authenticator) scopedOffboard(ctx context.Context, as store.AuthScope, 
 	if err := removeTenantGroupRows(ctx, as, user, t); err != nil {
 		return model.TenantExclusion{}, err
 	}
+	// The membership is gone, so a suspension of it is too: a person added again
+	// later starts as a new member, never still suspended.
+	if err := liftSuspension(ctx, as, user, t); err != nil {
+		return model.TenantExclusion{}, err
+	}
 	if err := revokeTenantTokens(ctx, as, actor, user, t); err != nil {
 		return model.TenantExclusion{}, err
 	}

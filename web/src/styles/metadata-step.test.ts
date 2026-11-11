@@ -28,17 +28,17 @@ export const MAY_USE: Readonly<
   Record<string, { steps: readonly Step[]; why: string }>
 > = {
   'components/ui/count-badge.tsx': {
-    steps: ['metadata-s'],
-    why: 'a counter',
+    steps: ['metadata', 'metadata-s'],
+    why: "a counter; the counter step in the rail's corner",
   },
   'components/ui/kbd.tsx': { steps: ['metadata-s'], why: 'a key hint' },
   'components/ui/command.tsx': {
-    steps: ['metadata-s'],
-    why: "the palette's key hint",
+    steps: ['metadata', 'metadata-s'],
+    why: "the palette's key hints; its Enter key at 11 px on an 18 px line",
   },
-  'components/layout/status-bar.tsx': {
+  'components/layout/sidebar.tsx': {
     steps: ['metadata'],
-    why: "the status bar's secondary facts",
+    why: "the phone bar's labels under their icons",
   },
   'features/home/now-queue.tsx': {
     steps: ['metadata-s'],
@@ -47,10 +47,6 @@ export const MAY_USE: Readonly<
   'features/api-playground/api-playground-view.tsx': {
     steps: ['metadata-s'],
     why: 'the response-history counter',
-  },
-  'features/access-map/edges.tsx': {
-    steps: ['metadata-s'],
-    why: 'the access-edge token counter',
   },
 }
 
@@ -106,14 +102,13 @@ describe('the metadata step', () => {
   it('sets every Settings key hint through Kbd', () => {
     const source = readFileSync(resolve(SRC, 'app/pages/settings.tsx'), 'utf8')
     expect(source).not.toMatch(/<kbd\b/)
-    expect(source.match(/<Kbd\b/g)).toHaveLength(2)
+    // One: the keyboard section. The search moved to the sidebar's Settings list, which
+    // draws it with no key hint.
+    expect(source.match(/<Kbd\b/g)).toHaveLength(1)
   })
 
   it('sets the remaining count pills in the counter step', () => {
-    for (const rel of [
-      'features/api-playground/api-playground-view.tsx',
-      'features/access-map/edges.tsx',
-    ]) {
+    for (const rel of ['features/api-playground/api-playground-view.tsx']) {
       const source = readFileSync(resolve(SRC, rel), 'utf8')
       expect(source, rel).toContain('text-metadata-s')
       expect(source, rel).not.toMatch(RAW_SMALL)

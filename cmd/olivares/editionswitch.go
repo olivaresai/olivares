@@ -119,27 +119,24 @@ func editionSwitchBase(kind string) api.EditionSwitchDTO {
 	return s
 }
 
-// commercialEdition is the edition a live license entitles ("" when it entitles none): the
-// product name of its profile, Business unless the profile says Enterprise. An expired, invalid
-// or missing license entitles nothing, so a Community build with one has no switch to offer.
+// commercialEdition is the paid edition a live license entitles ("" when it entitles none): the
+// one reading of the license (license.Verified.Edition) the display carries. An expired, invalid,
+// missing or unknown license entitles nothing, so a Community build with one has no switch to offer.
 func commercialEdition(d api.LicenseDisplayInfo) string {
-	if d.Status != "valid" && d.Status != "perpetual" {
+	if d.LicensedEdition == license.EditionCommunity {
 		return ""
 	}
-	profile := strings.ToLower(strings.TrimSpace(d.SupportProfile))
-	if profile == "" {
-		profile = strings.ToLower(strings.TrimSpace(d.Plan))
-	}
-	if profile == "enterprise" {
-		return "enterprise"
-	}
-	return "business"
+	return d.LicensedEdition
 }
 
 // withEdition names the edition a step moves to: what `license install`, `license status` and the
-// console's update status all hand out.
+// console's update status all hand out. Engineer runs the same licensed build, and its step says
+// --edition engineer, the name the owner bought.
 func withEdition(s api.EditionSwitchDTO, to string) *api.EditionSwitchDTO {
 	s.To = to
+	if to == license.EditionEngineer {
+		s.Command = strings.Replace(s.Command, "--edition business", "--edition engineer", 1)
+	}
 	return &s
 }
 
@@ -150,7 +147,7 @@ func licensedEditionSwitch(lic license.Verified, status license.Status, dataDir 
 	if thisEdition.name != "community" {
 		return nil
 	}
-	to := commercialEdition(api.LicenseDisplayInfo{Status: string(status), Plan: lic.Plan(), SupportProfile: lic.SupportProfile()})
+	to := commercialEdition(api.LicenseDisplayInfo{LicensedEdition: lic.Edition(status)})
 	if to == "" {
 		return nil
 	}
@@ -160,10 +157,13 @@ func licensedEditionSwitch(lic license.Verified, status license.Status, dataDir 
 // editionSwitchNote is the paragraph `license install` prints for a switch.
 func editionSwitchNote(s *api.EditionSwitchDTO) string {
 	name := "Business"
-	if s.To == "enterprise" {
+	switch s.To {
+	case license.EditionEngineer:
+		name = "Engineer"
+	case license.EditionEnterprise:
 		name = "Enterprise"
 	}
-	note := fmt.Sprintf("This license is for the %s edition and this installation runs the Community build.", name)
+	note := fmt.Sprintf("This license is for Olivares AI %s and this installation runs Olivares AI Community.", name)
 	if s.Command != "" {
 		note += "\nNext step: " + s.Command
 	}

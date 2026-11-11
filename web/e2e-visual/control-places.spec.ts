@@ -223,7 +223,6 @@ test('Usage is one click from the sidebar and leads with the account nearest its
   await mockApi(page)
   await page.goto('/')
   const nav = page.getByRole('navigation', { name: 'Main navigation' })
-  await nav.getByRole('button', { name: 'More', exact: true }).click()
   await nav.getByRole('link', { name: /^Usage/ }).click()
   await expect(page).toHaveURL(/\/usage$/)
   await expectUsageFigures(page)

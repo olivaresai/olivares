@@ -38,6 +38,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { StatusBadge } from '@/components/data/badges'
 import { useAuth } from '@/lib/auth/context'
+import { reportEditionRefusal } from '@/lib/hooks/use-privileged-mutation'
 import { RelTimeLabel } from '@/features/shared'
 import {
   ClassificationBadge,
@@ -115,7 +116,10 @@ function MemoryIntegrityPanel({ canAdmin }: { canAdmin: boolean }) {
   const verificar = useMutation({
     mutationFn: () => knowledgeApi.verifyMemory(),
     onSuccess: (r) => setInforme(r as never),
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   if (!canAdmin) return <ForbiddenState />
@@ -255,7 +259,10 @@ function ScansPanel({
       setFuente('')
       void qc.invalidateQueries({ queryKey: knowledgeKeys.scans(tenant) })
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   if (!canRead) return <ForbiddenState />
@@ -402,12 +409,20 @@ function DlpPanel({
       setClase('')
       refrescar(tenant)
     },
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   const borrar = useMutation({
     mutationFn: ({ id, tenant }: { id: string; tenant: string | null }) =>
       knowledgeApi.deleteDlpRule(id, { tenant }),
     onSuccess: (_data, { tenant }) => refrescar(tenant),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   if (!canRead) return <ForbiddenState />
@@ -1382,13 +1397,19 @@ function PortabilityPanel({
       // Conservarlo byte por byte permite copiarlo y volverlo a importar.
       setPegado(r.raw)
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   const importar = useMutation({
     mutationFn: () => knowledgeApi.importMemory(pegado),
     onSuccess: (r) => setResultado(r as never),
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   const rechazadas = resultado?.rejected ?? []

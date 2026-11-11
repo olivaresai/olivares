@@ -150,7 +150,7 @@ func newUpgradeCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.BoolVar(&o.enterprise, "enterprise", false, "upgrade the licensed Business edition (gated download; needs a live license)")
-	f.StringVar(&o.edition, "edition", "", "install or update the licensed build of this edition: business (or its alias enterprise); the same route as --enterprise, and the one a Community build with a Business license takes")
+	f.StringVar(&o.edition, "edition", "", "install or update the licensed build of this edition: engineer or business (or its alias enterprise), one build; the same route as --enterprise, and the one a Community build with an Engineer or Business license takes")
 	f.StringVar(&o.token, "token", "", "Business download token from your license/fulfillment email")
 	f.StringVar(&o.endpoint, "endpoint", "", "update channel source: a GitHub repository (https://github.com/<owner>/<repo>), one of its releases (…/releases/tag/<tag>), or a static mirror base (<base>/<channel>/manifest.json). Default: the public repository's releases; the license worker with --enterprise")
 	// `lts` is still a value release.ValidChannel accepts, so hiding it would document a
@@ -187,7 +187,7 @@ var applianceRollbackUnit = "/usr/lib/systemd/system/olivares-appliance-rollback
 // startUnit starts a unit and waits for its job, as systemctl start does for a oneshot unit; the tool's own
 // messages go to standard error.
 var startUnit = func(ctx context.Context, unit string) error {
-	cmd := exec.CommandContext(ctx, "systemctl", "start", unit)
+	cmd := exec.CommandContext(ctx, "systemctl", "start", unit) // #nosec G204 -- fixed executable; sole production caller supplies the built-in rollback unit basename, never user input.
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 	return cmd.Run()
 }
@@ -802,18 +802,18 @@ func buildUpdateSource(o *upgradeOptions, pub ed25519.PublicKey) (updateSource, 
 }
 
 // applyEditionFlag reads --edition: the licensed route under the name the console, the portal
-// and the docs use. Business and Enterprise are one build (Enterprise is a negotiated scope), so
-// both select it; any other value is refused with the one it accepts, never guessed.
+// and the docs use. Engineer, Business and Enterprise are one build (the license decides what it
+// enables; Enterprise is a negotiated scope), so all three select it; any other value is refused with the one it accepts, never guessed.
 func applyEditionFlag(cmd *cobra.Command, o *upgradeOptions) error {
 	if !cmd.Flags().Changed("edition") {
 		return nil
 	}
 	switch strings.ToLower(strings.TrimSpace(o.edition)) {
-	case "business", "enterprise":
+	case "engineer", "business", "enterprise":
 		o.enterprise = true
 		return nil
 	}
-	return exitcode.New(exitcode.Usage, fmt.Errorf("unknown --edition %q (want business): Community is the public build, and `olivares upgrade` with no --edition keeps the edition installed", o.edition))
+	return exitcode.New(exitcode.Usage, fmt.Errorf("unknown --edition %q (want engineer or business): Community is the public build, and `olivares upgrade` with no --edition keeps the edition installed", o.edition))
 }
 
 // preferConnectedToken makes the licensed route need nothing typed on an installation that is

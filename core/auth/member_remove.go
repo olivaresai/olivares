@@ -133,9 +133,46 @@ func checkMemberRemovable(ctx context.Context, as store.AuthScope, actor Princip
 		if err != nil {
 			return err
 		}
-		if other.Status == model.StatusActive {
+		if other.Status != model.StatusActive {
+			continue
+		}
+		if suspended, err := suspensionInForce(ctx, as, m.UserID, tenant); err != nil {
+			return err
+		} else if !suspended {
 			return nil
 		}
 	}
 	return ErrLastOwner
+}
+
+// suspensionInForce reports whether tenant has suspended the account: a suspended
+// owner cannot run the organization, so it never counts as the active owner a
+// removal must leave behind.
+func suspensionInForce(ctx context.Context, as store.AuthScope, user model.ID, tenant model.TenantID) (bool, error) {
+	rows, err := drainList(ctx, as.TenantExclusions().List, byEq("user_id", user.String(), 0))
+	if err != nil {
+		return false, err
+	}
+	for _, x := range rows {
+		if x.Kind == model.ExclusionSuspend && x.TargetTenantID == tenant {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// liftSuspension deletes the suspension exclusions of user in tenant, if any.
+func liftSuspension(ctx context.Context, as store.AuthScope, user model.ID, tenant model.TenantID) error {
+	rows, err := drainList(ctx, as.TenantExclusions().List, byEq("user_id", user.String(), 0))
+	if err != nil {
+		return err
+	}
+	for _, x := range rows {
+		if x.Kind == model.ExclusionSuspend && x.TargetTenantID == tenant {
+			if err := as.TenantExclusions().Delete(ctx, x.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

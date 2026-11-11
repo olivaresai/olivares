@@ -116,7 +116,7 @@ export function OnboardingView() {
             <li key={n.key}>
               <Link
                 to={n.to as '/'}
-                className="text-body text-accent-text underline underline-offset-2"
+                className="text-body text-foreground underline underline-offset-2"
               >
                 {n.key === 'budgets' && COST_VIEW.id === 'storedBudgets'
                   ? t('nav:items.storedBudgets')

@@ -429,7 +429,7 @@ export function ReviewText({
       {long ? (
         <button
           type="button"
-          className="text-caption text-accent-text underline underline-offset-2"
+          className="text-caption text-foreground underline underline-offset-2"
           aria-expanded={all}
           onClick={() => setAll((v) => !v)}
         >

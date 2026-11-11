@@ -31,7 +31,7 @@
       "available": "Available",
       "opt_in_off": "Opt-in off",
       "blocked": "Blocked",
-      "unavailable": "Requires Business"
+      "unavailable": "Requires Olivares AI Business"
     },
     "optInOff": "Convention in Development — off by default; enable via the connector gate.",
     "gate": "Gate",

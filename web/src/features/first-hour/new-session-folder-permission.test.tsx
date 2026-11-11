@@ -43,7 +43,7 @@ import { providersApi } from '@/features/providers/api'
 import { useTenantStore } from '@/stores/tenant'
 import { StartSessionForm } from './first-hour'
 
-function renderForm(folder: Partial<WorkspaceDTO>) {
+function renderForm(folder: Partial<WorkspaceDTO>, composer = false) {
   vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
     items: [
       {
@@ -72,7 +72,7 @@ function renderForm(folder: Partial<WorkspaceDTO>) {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <StartSessionForm />
+      <StartSessionForm composer={composer} />
     </QueryClientProvider>,
   )
 }
@@ -253,5 +253,45 @@ describe('the permissions in the New session picker', () => {
       driver: 'claude',
       permission: 'auto',
     })
+  })
+})
+
+describe('a worktree from the New session form', () => {
+  it('starts on the current checkout unless the person asks for a new worktree', async () => {
+    renderForm({})
+    await screen.findByRole('button', { name: 'Start' })
+    expect(await started()).not.toHaveProperty('worktree')
+  })
+
+  it('starts on a new worktree, from the branch the person names', async () => {
+    const user = userEvent.setup()
+    renderForm({})
+    await screen.findByRole('button', { name: 'Start' })
+    await user.click(await screen.findByRole('radio', { name: 'New worktree' }))
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Start from' }),
+      'release-0.9',
+    )
+    expect(await started()).toMatchObject({
+      worktree: true,
+      worktreeFrom: 'release-0.9',
+    })
+  })
+
+  it('offers the same choice from the composer pill', async () => {
+    const user = userEvent.setup()
+    renderForm({}, true)
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Working copy: Current checkout/,
+      }),
+    )
+    await user.click(await screen.findByRole('radio', { name: 'New worktree' }))
+    expect(
+      await screen.findByRole('textbox', { name: 'Start from' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Working copy: New worktree/ }),
+    ).toBeVisible()
   })
 })

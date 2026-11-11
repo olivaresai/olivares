@@ -10,7 +10,19 @@ import { http } from '@/lib/api'
 import { ApiError } from '@/lib/api/errors'
 import { identityApi } from '@/features/identity/api'
 import { StepUpPolicySetting } from '@/features/identity/step-up-policy'
-import { SettingsPage } from './settings'
+import { SettingsSectionNavigation } from '@/components/layout/settings-section-navigation'
+import { fakeRouter } from '@/test/fake-router'
+import { SettingsPage as SettingsContent } from './settings'
+
+// The section navigation lives in the shell sidebar, not in the page: mount it beside the content.
+function SettingsPage() {
+  return (
+    <>
+      <SettingsSectionNavigation />
+      <SettingsContent />
+    </>
+  )
+}
 
 const oneKey = vi.hoisted(() => ({
   items: [
@@ -26,12 +38,10 @@ const state = vi.hoisted(() => ({
   satisfied: true,
   amr: ['pwd'] as string[],
 }))
-vi.mock('@tanstack/react-router', async () => ({
-  useNavigate: () => vi.fn(),
-  useRouter: () => undefined,
-  useRouterState: () => undefined,
-  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
-}))
+// A section click moves the address the page reads, so the router double keeps one location.
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     principal: {
@@ -94,7 +104,7 @@ beforeEach(() => {
   vi.mocked(identityApi.authSessions).mockClear()
   vi.mocked(identityApi.authSessions).mockResolvedValue({ items: [] })
   vi.mocked(identityApi.authSessionDelete).mockClear()
-  window.history.replaceState(null, '', '/settings')
+  fakeRouter.reset('/settings')
 })
 
 it.each([true, false])(

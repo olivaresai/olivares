@@ -72,7 +72,13 @@
     "editorSsh": "编辑器的 SSH 主机",
     "editorSshHint": "编辑器连接另一台机器上会话文件夹的方式，格式为 user@host 或 user@host:port。留空则使用提供此控制台的地址；若为本机则不使用 SSH。",
     "reduceMotion": "减少动态效果",
-    "reduceMotionHint": "用淡入淡出代替移动。系统要求时开启。"
+    "reduceMotionHint": "用淡入淡出代替移动。系统要求时开启。",
+    "sendKey": "发送键",
+    "sendKeyHint": "在会话中发送消息的按键。选第二项时，Enter 为换行。",
+    "sendWhileRunning": "工具工作时",
+    "sendWhileRunningHint": "一轮运行期间发送键的作用。若 Enter 发送，则 Ctrl+Enter 执行另一种。",
+    "sendQueue": "排队",
+    "sendSteer": "插入当前轮"
   },
   "sessionNotifications": {
     "title": "会话通知",
@@ -93,14 +99,14 @@
     "scope": "此安装响应的按键。对每个人都相同。"
   },
   "edition": {
-    "scope": "此构建的版本、其许可证，以及 Business 增加的功能。",
+    "scope": "此构建的版本、其许可证，以及 Olivares AI Business 增加的功能。",
     "label": "版本",
     "unknown": "此引擎未报告",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business 新增",
+    "businessAdds": "Olivares AI Business 新增",
     "summary": {
       "Session cockpit and fleet deployment.": "会话驾驶舱与批量部署。",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "实时会话共享，提供具名且会过期的访客访问，以及由所有者批准的消息提议。",
@@ -111,11 +117,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise 包含 Business 的全部内容，另加合同约定的条款以及依赖这些条款的功能。"
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "{{edition}} 版本",
+      "accessibleName": "Olivares AI {{edition}} 版本",
       "show": "显示版本徽章",
       "loadError": "无法加载徽章偏好设置。",
       "saveError": "无法保存徽章偏好设置。请重试。"
@@ -311,7 +319,7 @@
     "inactive": "跟踪已关闭。",
     "apply": "应用",
     "saved": "跟踪设置已保存。",
-    "businessRequired": "SIEM 推送和外部遥测导出需要 Business。设置会保留；Community 不会发送数据。"
+    "businessRequired": "SIEM 推送和外部遥测导出需要 Olivares AI Business。设置会保留；Olivares AI Community 不会发送数据。"
   },
   "signIn": {
     "methods": "登录方式",

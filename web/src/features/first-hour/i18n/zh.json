@@ -84,6 +84,7 @@
     "notReady": "{{tool}} 尚无法启动。",
     "folder": "文件夹",
     "folderHint": "此服务器上的一个文件夹。",
+    "folderHintGiven": "此服务器上已登记的文件夹的路径。新文件夹由管理员登记。",
     "folderChoose": "选择文件夹",
     "folderNew": "为此会话新建的文件夹",
     "folderTyped": "其他文件夹…",
@@ -111,6 +112,7 @@
     "credentialsManage": "管理托管凭据",
     "listUnavailable": "引擎未返回密钥列表。目前无法选择任何内容。",
     "openTools": "打开 AI 工具",
+    "askAdmin": "请让管理员将其准备就绪。",
     "model": "模型",
     "providerDefault": "默认（{{model}}）",
     "nativeDefault": "{{tool}} 默认",
@@ -123,14 +125,21 @@
     "profileNeedsKey": "需要密钥",
     "foldersUnreadable": "无法读取已登记的文件夹。请输入此服务器上某个文件夹的路径。",
     "folderPermission": "将以“{{name}}”启动，这是此文件夹的默认权限。",
-    "autoAsks": "{{tool}} 没有自动模式：每次操作前都会询问。"
+    "autoAsks": "{{tool}} 没有自动模式：每次操作前都会询问。",
+    "worktreeCheckout": "当前检出",
+    "worktreeNew": "新建工作树",
+    "worktreeFrom": "起点",
+    "worktreeFromHint": "分支或提交（可选）",
+    "worktreeNewHint": "会话在单独文件夹的专属分支上工作，当前检出保持不变。",
+    "worktreeLegend": "工作副本"
   },
   "composer": {
     "toolPill": "工具和账户：{{value}}",
     "modelPill": "模型：{{value}}",
     "effortPill": "推理强度：{{value}}",
     "folderPill": "文件夹：{{value}}",
-    "moreOptions": "更多选项"
+    "moreOptions": "更多选项",
+    "worktreePill": "工作副本：{{value}}"
   },
   "lists": {
     "foldersTruncated": "已注册文件夹：已加载 {{count}} 个；还有更多。",

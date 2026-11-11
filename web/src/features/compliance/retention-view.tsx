@@ -68,6 +68,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import { reportEditionRefusal } from '@/lib/hooks/use-privileged-mutation'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import {
   AsyncSection,
@@ -532,6 +533,7 @@ function ScheduleDialog({
       // The engine's refusals on this route are governed answers, not faults, and
       // three of them are indistinguishable from "the server broke" if reported by
       // status class alone. Named by STATUS, never by matching the message text.
+      if (reportEditionRefusal(e)) return
       if (e instanceof ApiError) {
         if (e.status === 503) {
           toast.warning(t('retention.dialog.noGate'))
@@ -808,6 +810,7 @@ function DeleteScheduleDialog({
       // `modules/compliance/`. Añadir aquí la rama sería código para una respuesta que el
       // motor no da. Si algún día se pone el gate en esta ruta, ESTE es el sitio, y entonces
       // la rama va DELANTE de la del sello: un step-up no es un sello.
+      if (reportEditionRefusal(e)) return
       if (e instanceof ApiError && e.isForbidden) {
         toast.warning(t('retention.dialog.sealed'), { description: e.message })
         return

@@ -8,17 +8,19 @@ import { act, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLAG_ARM_MS } from '@/features/governance/approval-preview'
 import type { ApprovalDTO } from '@/features/governance/types'
+import { ADMIN_READS } from '@/features/navigation/admin-reads.fixture'
 import { ApiError } from '@/lib/api/errors'
 
 const { identity } = vi.hoisted(() => ({
   identity: {
     activeTenant: 't1',
     principal: { kind: 'user', user_id: 'u-self' },
+    can: (_p: string): boolean => true,
   },
 }))
 
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ ...identity, isSuperadmin: true, can: () => true }),
+  useAuth: () => ({ ...identity, isSuperadmin: true }),
 }))
 
 vi.mock('@/features/console/api', () => ({
@@ -120,6 +122,10 @@ vi.mock('./use-session-rail', () => ({
 
 import { NotificationBell } from './notification-bell'
 
+// What the bell says where it may not read the ledger: who sees recent activity.
+const AUDIT_ONLY =
+  'Recent activity is shown to people who can read the audit ledger.'
+
 const shown = () => ledger.filter((e) => e.action !== 'audit.read')
 const labelOf = (event: { action: string }) =>
   event.action.replace(/[._]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
@@ -139,6 +145,7 @@ const mount = () =>
 beforeEach(() => {
   identity.activeTenant = 't1'
   identity.principal = { kind: 'user', user_id: 'u-self' }
+  identity.can = () => true
   recentMock.mockClear()
   listMock.mockClear()
   approvalsMock.mockReset()
@@ -413,5 +420,70 @@ describe('NotificationBell', () => {
     await user.click(screen.getByRole('button'))
     const link = await screen.findByRole('link', { name: /view all/i })
     expect(link).toHaveAttribute('href', '/audit')
+  })
+
+  it('asks nothing of the ledger for a member and says who sees recent activity', async () => {
+    // A member holds no audit:read: the engine refuses them the recent read.
+    identity.can = () => false
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    expect(await screen.findByText(AUDIT_ONLY)).toBeVisible()
+    expect(recentMock).not.toHaveBeenCalled()
+    expect(screen.queryByText(/no recent activity/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+    // Nothing waits for this person: the bell carries no dot.
+    expect(
+      screen.getByRole('button', { name: 'Recent activity' }),
+    ).toBeInTheDocument()
+  })
+
+  it('says who sees recent activity when the engine refuses the read', async () => {
+    // The console thought this person could read (permissions changed, a stale session).
+    recentMock.mockRejectedValueOnce(
+      new ApiError(403, 'forbidden', 'You may not read the audit ledger'),
+    )
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    expect(await screen.findByText(AUDIT_ONLY)).toBeVisible()
+    expect(recentMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/no recent activity/i)).toBeNull()
+  })
+
+  it('shows an editor the request they may decide, reads no ledger and offers no "view all"', async () => {
+    // An editor holds none of the administrator's reads: the ledger is not theirs.
+    identity.can = (p) => !ADMIN_READS.has(p)
+    approvalsMock.mockResolvedValue({
+      items: [
+        {
+          id: 'apr-2',
+          status: 'pending',
+          action: 'killswitch.release',
+          reason: 'Release the kill switch',
+          required_approvals: 1,
+          approve_count: 0,
+          reject_count: 0,
+          escalated: false,
+          may_decide: true,
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    mount()
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Recent activity, Needs you',
+      }),
+    )
+    expect(screen.getByText('Release the kill switch')).toBeVisible()
+    expect(await screen.findByText(AUDIT_ONLY)).toBeVisible()
+    expect(recentMock).not.toHaveBeenCalled()
+    expect(screen.queryByText(/no recent activity/i)).toBeNull()
+    expect(
+      screen.queryByRole('checkbox', { name: 'Include internal records' }),
+    ).toBeNull()
+    expect(screen.queryByRole('link', { name: /view all/i })).toBeNull()
   })
 })

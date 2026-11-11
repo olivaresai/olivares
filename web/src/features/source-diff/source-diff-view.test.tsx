@@ -69,8 +69,8 @@ const resources = {
   addedLine: 'Added, new line {{line}}.',
   removedLine: 'Removed, old line {{line}}.',
   contextLine: 'Context, line {{line}}.',
-  diffLabel: 'Unified diff of {{path}}',
-  diffLabelRich: 'Unified diff of <path />',
+  diffLabel: 'Diff of {{path}}',
+  diffLabelRich: 'Diff of <path />',
   status: {
     added: 'Added',
     modified: 'Modified',
@@ -274,10 +274,10 @@ describe('source diff view', () => {
   it('renders the rich diff caption through PathText', async () => {
     renderView(async () => diff())
     const region = await screen.findByRole('region', {
-      name: 'Unified diff of ingest/queue.py',
+      name: 'Diff of ingest/queue.py',
     })
     const caption = region.querySelector('caption')!
-    expect(caption).toHaveTextContent('Unified diff of ingest/queue.py')
+    expect(caption).toHaveTextContent('Diff of ingest/queue.py')
     expect(caption.querySelector('[data-slot="path-text"]')).not.toBeNull()
   })
 
@@ -750,11 +750,11 @@ describe('source diff view', () => {
       diff({ files: [file({ hunks: [lines.join('\n') + '\n'] })] }),
     )
     const region = await screen.findByRole('region', { name: /queue.py/ })
-    expect(within(region).getByText('LINE-0001')).toBeInTheDocument()
+    expect(within(region).getAllByText('LINE-0001')).toHaveLength(2)
     expect(within(region).queryByText('LINE-0201')).not.toBeInTheDocument()
     region.focus()
     await user.keyboard('{PageDown}')
-    expect(within(region).getByText('LINE-0201')).toBeInTheDocument()
+    expect(within(region).getAllByText('LINE-0201')).toHaveLength(2)
   })
 })
 

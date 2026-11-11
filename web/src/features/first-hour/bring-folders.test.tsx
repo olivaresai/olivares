@@ -19,8 +19,10 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
+import { toast } from '@/components/ui/toaster'
 import { agentOpsApi } from '@/features/agentops/api'
 import type { FolderCandidatesDTO } from '@/features/agentops/types'
+import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
 import { BringFolders } from './bring-folders'
 
@@ -183,5 +185,32 @@ describe('Bring your folders', () => {
     expect(
       screen.queryByRole('button', { name: /Register selected/ }),
     ).not.toBeInTheDocument()
+  })
+
+  // An edition refusal answers for every folder alike: the step says the edition line once
+  // and stops, rather than sending each folder to be refused in turn.
+  it('stops at an edition refusal instead of sending every folder', async () => {
+    const info = vi.spyOn(toast, 'info')
+    const create = renderStep()
+    create.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-bring', {
+        edition: 'business',
+      }),
+    )
+    const user = userEvent.setup()
+    await user.click(
+      await screen.findByRole('checkbox', {
+        name: 'Register /srv/work/old (Claude Code)',
+      }),
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Register selected (2)' }),
+    )
+    await waitFor(() => expect(info).toHaveBeenCalledTimes(1))
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/^Registered: \d+\./)).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Register selected (2)' }),
+    ).toBeInTheDocument()
   })
 })

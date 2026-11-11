@@ -2,7 +2,50 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { HTMLAttributes, ReactNode } from 'react'
+import { BrandMark } from '@/components/layout/brand'
 import { cn } from '@/lib/utils'
+
+/**
+ * THE STATE PAGE, as direction A2 draws it (a status page): a large symbolic icon or the
+ * product's own mark, a real title at 22/800, one sentence at 15 px, one action. One source
+ * for every state that draws it: EmptyState, ErrorState, ForbiddenState, StateBlock, the
+ * module-off page and the page that names the edition.
+ */
+export const STATE_PAGE =
+  'mx-auto flex w-full max-w-120 flex-col items-center justify-center gap-2 px-6 pt-26 pb-24 text-center'
+/** The large symbolic icon: 72 px with a 2.6 px stroke; its colour is the state's. */
+export const STATE_ICON =
+  'mb-[18px] flex [&_svg]:size-18 [&_svg]:shrink-0 [&_svg]:stroke-[0.875]'
+export const STATE_TITLE =
+  'm-0 text-[1.375rem]/7 font-extrabold tracking-[-0.006em] text-balance text-text'
+export const STATE_SENTENCE =
+  'm-0 max-w-[42ch] text-body-l text-pretty text-text-2'
+export const STATE_ACTIONS =
+  'mt-5 flex flex-wrap items-center justify-center gap-2'
+
+/**
+ * `panel` is the same page inside a side panel, a sheet, a card or a table body: 32 px
+ * above and below, a 40 px face (the icon or the mark) and the title at the heading step.
+ */
+export type StateSize = 'page' | 'panel'
+export const STATE_PANEL = {
+  page: 'py-8',
+  icon: '[&_svg]:size-10',
+  mark: 'size-10',
+  title: 'text-heading',
+} as const
+
+/**
+ * The face of an empty page and of the page that names the edition: the four-row mark
+ * (BrandMark) at 64 px, never another drawing of it and never the name beside it.
+ */
+export function StateMark({ size = 'page' }: { size?: StateSize }) {
+  return (
+    <div data-slot="state-mark" className="mb-5 flex text-text">
+      <BrandMark className={size === 'panel' ? STATE_PANEL.mark : 'size-16'} />
+    </div>
+  )
+}
 
 /**
  * EmptyState — the calm "nothing here yet" placeholder for a list, table, or panel
@@ -60,12 +103,22 @@ interface EmptyStateBase extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
  *    carry an action. It is a compile error, not a review comment.
  */
 type QuietProps =
-  | { quiet: true; action?: never; secondaryAction?: never; icon?: never }
+  | {
+      quiet: true
+      action?: never
+      secondaryAction?: never
+      icon?: never
+      size?: never
+    }
   | {
       quiet?: false
-      /** A lucide icon element, e.g. <Inbox />. Sized down to 20px in a muted chip. */
+      /** `panel` inside a side panel, a sheet, a card or a table body. */
+      size?: StateSize
+      /** Kept so no caller changes. An empty page's face is the product's mark
+       *  (direction A2), so the place icon is no longer drawn. */
       icon?: ReactNode
-      /** The single primary CTA (typically a <Button>), below the description. */
+      /** The single primary CTA (typically a <Button>), below the description,
+       *  drawn as a pill. */
       action?: ReactNode
       /** An optional quieter alternative beside it — "Learn more", "Clear the
        *  filter". Never a second way to do the same thing. */
@@ -75,12 +128,13 @@ type QuietProps =
 export type EmptyStateProps = EmptyStateBase & QuietProps
 
 export function EmptyState({
-  icon,
+  icon: _placeIcon,
   title,
   description,
   action,
   secondaryAction,
   quiet,
+  size,
   className,
   ...props
 }: EmptyStateProps) {
@@ -115,25 +169,20 @@ export function EmptyState({
       // silence (4.1.3). The genuine-error sibling ErrorState uses role="alert".
       role="status"
       className={cn(
-        'flex flex-col items-center justify-center gap-3 px-6 py-12 text-center',
+        STATE_PAGE,
+        size === 'panel' && STATE_PANEL.page,
         className,
       )}
       {...props}
     >
-      {icon ? (
-        <div
-          data-slot="state-icon"
-          className="flex size-10 items-center justify-center rounded-card border border-line bg-surface text-text-3 [&_svg]:size-5 [&_svg]:shrink-0"
-        >
-          {icon}
-        </div>
-      ) : null}
-      <div className="flex flex-col items-center gap-1.5">
-        <p className="text-heading text-text">{title}</p>
-        <p className="max-w-sm text-caption text-text-2">{description}</p>
-      </div>
+      <StateMark size={size} />
+      <p className={cn(STATE_TITLE, size === 'panel' && STATE_PANEL.title)}>
+        {title}
+      </p>
+      <p className={STATE_SENTENCE}>{description}</p>
       {action || secondaryAction ? (
-        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+        // The state page's one action is a pill (the button has no pill size yet).
+        <div className={cn(STATE_ACTIONS, '*:rounded-full')}>
           {action}
           {secondaryAction}
         </div>

@@ -370,18 +370,26 @@
       "placeholder": "Eingabe stellt eine Nachricht für nach diesem Durchgang in die Warteschlange",
       "placeholderSteer": "Eingabe stellt sie für nach diesem Durchgang in die Warteschlange, Strg+Eingabe lenkt sie jetzt um",
       "discarded": "Die Sitzung wurde freigegeben, während diese Nachrichten noch in der Warteschlange standen:",
-      "copy": "Kopieren"
-    }
+      "copy": "Kopieren",
+      "placeholderQueueKey": "{{key}} stellt eine Nachricht für nach diesem Durchgang in die Warteschlange",
+      "placeholderSteerKey": "{{key}} lenkt sie jetzt um"
+    },
+    "stash": "Entwurf beiseitelegen",
+    "stashRestore": "Beiseitegelegten Entwurf zurückholen",
+    "plan": "Plan",
+    "planHint": "Erst planen: Das Werkzeug liest und schlägt einen Plan vor, ändert aber nichts. Gilt ab der nächsten Nachricht."
   },
   "shell": {
     "more": "Mehr",
     "searchCommands": "Suche und Befehle",
     "search": "Suche",
+    "searchGo": "Suchen oder gehen zu…",
     "stopAll": "Alle stoppen",
     "workspaceCount": "Arbeitsbereiche: {{count}}",
     "rail": {
       "title": "Sitzungen",
-      "all": "Alle",
+      "seeAll_one": "{{count}} Sitzung ansehen",
+      "seeAll_other": "Alle {{count}} Sitzungen ansehen",
       "groups": {
         "needsYou": "Braucht Sie",
         "working": "Läuft",
@@ -431,15 +439,17 @@
     "killswitch": {
       "estateStopped": "ALLE AGENTEN GESTOPPT",
       "estateBody": "Agenten können nicht handeln, bis zwei Benutzerkonten den Neustart genehmigen.",
-      "agentStops": "{{count}} Agent-Stopp aktiv",
-      "agentStops_one": "{{count}} Agent-Stopp aktiv",
-      "agentStops_other": "{{count}} Agent-Stopps aktiv",
+      "agentStops": "{{count}} Agenten gestoppt",
+      "agentStops_one": "{{count}} Agent gestoppt",
+      "agentStops_other": "{{count}} Agenten gestoppt",
       "none": "Nichts ist gestoppt. Sitzungen und Agenten laufen normal."
     },
     "status": {
       "label": "Status",
       "running_one": "{{count}} Sitzung offen",
       "running_other": "{{count}} Sitzungen offen",
+      "needYou_one": "{{count}} braucht Sie",
+      "needYou_other": "{{count}} brauchen Sie",
       "usage": "Nutzung von {{tool}}",
       "fiveHour": "5 Std.",
       "week": "Wo.",
@@ -450,7 +460,6 @@
     },
     "collapse": "Navigation einklappen",
     "expand": "Navigation ausklappen",
-    "openNavigation": "Navigation öffnen",
     "closeNavigation": "Navigation schließen"
   },
   "places": {
@@ -476,6 +485,10 @@
     "securityRedTeam": "Red-Team-Läufe und Bewertung",
     "operationsDeploy": "Agenten auf andere Hosts verteilen",
     "operationsResidency": "Datenresidenz und Mandanten",
-    "retentionSchedules": "Aufbewahrungspläne werden nur in Olivares Business angewendet: Diese Edition speichert sie und löscht nichts."
+    "retentionSchedules": "Aufbewahrungspläne werden nur in Olivares AI Business angewendet: Diese Edition speichert sie und löscht nichts."
+  },
+  "groups": {
+    "control": "Governance",
+    "admin": "Verwaltung"
   }
 }

@@ -1449,8 +1449,9 @@ function foldLine(
         },
       ]
     }
+    const parent = asString(frame.parent_tool_use_id)
     const last = items[items.length - 1]
-    if (last?.kind === 'assistant') {
+    if (last?.kind === 'assistant' && last.parentToolId === parent) {
       const text = `${last.text ?? ''}${delta}`
       return [
         ...items.slice(0, -1),
@@ -1467,6 +1468,7 @@ function foldLine(
       {
         kind: 'assistant',
         id: nextId('assistant', items.length, asString(frame.uuid)),
+        ...(parent ? { subagent: true, parentToolId: parent } : {}),
         text: delta,
         summary: truncateSummary(delta),
         raw: [trimmed],

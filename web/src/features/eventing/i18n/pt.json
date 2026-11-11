@@ -96,7 +96,7 @@
       "maxAttempts": "O máximo de tentativas deve ser 0 ou estar entre 1 e 20.",
       "initialInterval": "O intervalo inicial deve ser 0 ou estar entre 5 e 3600 segundos."
     },
-    "businessRequired": "A entrega para SIEM e a exportação de telemetria externa exigem Business. As definições guardadas são preservadas; o Community não as envia."
+    "businessRequired": "A entrega para SIEM e a exportação de telemetria externa exigem Olivares AI Business. As definições guardadas são preservadas; o Olivares AI Community não as envia."
   },
   "secret": {
     "title": "Segredo da subscrição",

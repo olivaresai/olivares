@@ -42,6 +42,11 @@ type Installed struct {
 	PlanDigest       string      `json:"plan_digest,omitempty"`
 	ReceiptPath      string      `json:"receipt_path,omitempty"`
 	Provenance       *Provenance `json:"provenance,omitempty"`
+	// Compatibility is "supported" or "unsupported" against the range this engine release
+	// declares for the driver (driverfacts); absent when it declares none or the version
+	// has no semantic form. It informs only: a session still starts on an unsupported release.
+	Compatibility     string `json:"compatibility,omitempty"`
+	CompatibilityNote string `json:"compatibility_note,omitempty"`
 }
 
 // Release states. installed means receipt, bytes AND the retained signed
@@ -133,7 +138,11 @@ func (e *Engine) list(ctx context.Context, rootPath, driver string) (*Inventory,
 				}
 				inv.Leftovers = append(inv.Leftovers, lo)
 			case r.IsDir() && !strings.HasPrefix(r.Name(), "."):
-				inv.Installed = append(inv.Installed, e.inspectReleaseCached(ctx, root, rel, abs, d.Name()))
+				in := e.inspectReleaseCached(ctx, root, rel, abs, d.Name())
+				if facts, ok := driverfacts.Lookup(d.Name()); ok {
+					in.Compatibility, in.CompatibilityNote = facts.Compatibility(in.Version)
+				}
+				inv.Installed = append(inv.Installed, in)
 			default:
 				inv.Unexpected = append(inv.Unexpected, abs)
 			}

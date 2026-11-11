@@ -8,6 +8,7 @@
 // with credits and reset times, is the account's detail on Usage, and only there.
 import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Meter } from '@/components/ui/meter'
 import type { ProviderSnapshot } from '@/features/agent-tools/api'
 import { useProfileList } from '@/features/agent-tools/use-profiles'
 import { formatDateTime } from '@/lib/format'
@@ -223,20 +224,14 @@ export function UsageMeter({
 }: {
   usage: readonly ProviderAccountUsage[] | undefined
 }) {
-  const percents = sharesOf(usage).map((s) => s.percent)
-  if (percents.length === 0) return null
-  const peak = Math.max(...percents)
-  // The figures beside it say the same in words; the bar is for the eye.
+  const shares = sharesOf(usage)
+  if (shares.length === 0) return null
+  // The figures beside it say the same in words; the bar, unlabelled, is for the eye.
   return (
-    <meter
-      aria-hidden
-      min={0}
-      max={100}
-      low={80}
-      high={99}
-      optimum={0}
-      value={peak}
-      className="ms-2 me-1.5 h-1.5 w-10 align-middle"
+    <Meter
+      value={Math.max(...shares.map((s) => s.percent))}
+      warn={shares.some((s) => s.warning)}
+      className="ms-2 me-1.5 w-10"
     />
   )
 }

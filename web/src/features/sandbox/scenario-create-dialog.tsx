@@ -37,7 +37,10 @@ import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  useFailedActionReporter,
+} from '@/lib/hooks/use-privileged-mutation'
 import { useAuth } from '@/lib/auth/context'
 import { sandboxApi, sandboxKeys } from './api'
 import type { CreateScenarioInput, ScenarioMock, ScenarioStep } from './types'
@@ -131,6 +134,8 @@ export function ScenarioCreateDialog({
         )
         return
       }
+      // An edition is not a role: the edition line, calm, and the typed form stays.
+      if (reportEditionRefusal(err)) return
       if (err instanceof ApiError && err.isForbidden) {
         setFailure(t('common:privileged.notAuthorizedToast'))
         return

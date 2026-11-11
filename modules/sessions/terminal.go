@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -33,10 +34,18 @@ import (
 // and nothing more. Its network is the host's: a shell with no network cannot clone, push
 // or install, and no provider is bound to it to limit it to (sessionNetworkPolicy).
 //
-// The output is a byte stream that keeps its tail, so a browser that reconnects within
-// terminalReconnectWindow finds the same shell and reads from where it stopped. A shell
-// nobody is attached to for that long, or that has seen no input and no output for
-// terminalIdleTimeout, ends with everything it started.
+// The output is a byte stream that keeps its tail, so a browser that comes back, after a
+// dropped connection or after the person went elsewhere in the console, finds the same
+// shell and reads from where it stopped. A shell is the person's until they close it, it
+// exits, its folder is removed, their access is revoked or the server stops: no time limit
+// ends it, because a build or a server left running must still be running when they return.
+// The most one person keeps open (terminalMaxPerPerson) bounds what that can hold.
+//
+// Access is re-checked on every request and every open stream, and by a watcher per terminal
+// every sftpRecheckInterval (terminalWatch), so a shell nobody reads from ends within that time of
+// its person being signed out, removed, losing the right or the folder being removed or disabled.
+// Only a proven loss ends it (accessLost): a check that could not be answered, or a step-up that
+// went stale, leaves the shell running.
 //
 // Every start, every command line and every close is sealed in the audit ledger. A line is
 // sealed BEFORE the shell receives its newline (deny-closed: no evidence, no command), and
@@ -49,7 +58,7 @@ const (
 	// terminalChunkBytes is the most one read returns.
 	terminalChunkBytes = 16 << 10
 	// terminalMaxInputBytes bounds one input request, not a paste: the console sends a
-	// paste of any length in requests below it (use-terminal-session.ts), and a client
+	// paste of any length in requests below it (terminal-store.ts), and a client
 	// of the API is told the size to split at.
 	terminalMaxInputBytes = 64 << 10
 	// terminalMaxLineBytes bounds the excerpt; the payload hash seals the full line.
@@ -58,13 +67,6 @@ const (
 	terminalDrainWait = 2 * time.Second
 	// terminalMaxRows and terminalMaxCols bound the window a client may ask for.
 	terminalMaxRows, terminalMaxCols = 500, 1000
-)
-
-// ponytail: the limits below are fixed, not settings; upgrade trigger: an administrator
-// who needs a different idle time or reconnect window than 15 minutes and 60 seconds.
-var (
-	terminalIdleTimeout     = 15 * time.Minute
-	terminalReconnectWindow = 60 * time.Second
 )
 
 // terminalWho is the signed-in person a terminal belongs to.
@@ -86,6 +88,8 @@ type terminal struct {
 	folderRef string
 	who       terminalWho
 
+	started time.Time
+
 	confinement confine.State
 	master      *os.File
 	cmd         *exec.Cmd
@@ -104,9 +108,6 @@ type terminal struct {
 	exited   bool
 	exitCode int
 	reason   string
-	attached int
-	detach   *time.Timer
-	idle     *time.Timer
 }
 
 // terminalChunk is output from Offset on. Offset can be later than asked: the tail
@@ -128,6 +129,28 @@ func (h *terminalHub) remove(t *terminal) {
 	h.mu.Lock()
 	delete(h.byID, t.id)
 	h.mu.Unlock()
+}
+
+// listOf is one person's open terminals in one folder, oldest first: what terminalOf lets them reach.
+func (h *terminalHub) listOf(tenant model.TenantID, ref string, who terminalWho) []*terminal {
+	h.mu.Lock()
+	var own []*terminal
+	for _, t := range h.byID {
+		if t.tenant == tenant && t.folderRef == ref && t.who == who {
+			own = append(own, t)
+		}
+	}
+	h.mu.Unlock()
+	own = slices.DeleteFunc(own, func(t *terminal) bool {
+		select {
+		case <-t.doneCh:
+			return true
+		default:
+			return false
+		}
+	})
+	slices.SortFunc(own, func(a, b *terminal) int { return a.started.Compare(b.started) })
+	return own
 }
 
 // add registers t, or refuses it when the module is stopping or the person has too many.
@@ -232,7 +255,7 @@ func (m *Module) startTerminal(ctx context.Context, tenant model.TenantID, ref s
 		m: m, id: id, tenant: tenant, folderID: ws.id, folderRef: ref, who: who,
 		confinement: state, master: master, cmd: cmd, cancel: cancel,
 		release: func() { release(); ws.closeReadOnlyHandles() },
-		doneCh:  make(chan struct{}), changed: make(chan struct{}),
+		doneCh:  make(chan struct{}), changed: make(chan struct{}), started: time.Now(),
 	}
 	if err := m.terminals.add(t); err != nil {
 		t.discard()
@@ -246,10 +269,6 @@ func (m *Module) startTerminal(ctx context.Context, tenant model.TenantID, ref s
 		return nil, &runErr{http.StatusServiceUnavailable, "the terminal was not started because the audit ledger could not record it"}
 	}
 	t.sealed = true
-	t.mu.Lock()
-	t.idle = time.AfterFunc(terminalIdleTimeout, func() { t.close("idle") })
-	t.detach = time.AfterFunc(terminalReconnectWindow, func() { t.close("detached") })
-	t.mu.Unlock()
 	go t.run()
 	return t, nil
 }
@@ -369,7 +388,6 @@ func (t *terminal) run() {
 		t.reason = "exit"
 	}
 	reason := t.reason
-	t.stopTimers()
 	t.wake()
 	t.mu.Unlock()
 	t.cancel()
@@ -402,7 +420,6 @@ func (t *terminal) append(p []byte) {
 		t.buf = append(t.buf[:0], t.buf[over:]...)
 		t.base += uint64(over)
 	}
-	t.touchLocked()
 	t.wake()
 }
 
@@ -444,45 +461,6 @@ func (t *terminal) read(ctx context.Context, from uint64) (terminalChunk, error)
 	}
 }
 
-// attach says a browser is reading the terminal; the returned func says it stopped.
-// While nobody is attached the reconnect window runs.
-func (t *terminal) attach() func() {
-	t.mu.Lock()
-	t.attached++
-	if t.detach != nil {
-		t.detach.Stop()
-	}
-	t.mu.Unlock()
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			t.mu.Lock()
-			defer t.mu.Unlock()
-			t.attached--
-			if t.attached == 0 && !t.exited && t.detach != nil {
-				t.detach.Reset(terminalReconnectWindow)
-			}
-		})
-	}
-}
-
-// touchLocked restarts the idle limit. t.mu is held.
-func (t *terminal) touchLocked() {
-	if t.idle != nil && !t.exited {
-		t.idle.Reset(terminalIdleTimeout)
-	}
-}
-
-// stopTimers stops both limits. t.mu is held.
-func (t *terminal) stopTimers() {
-	if t.idle != nil {
-		t.idle.Stop()
-	}
-	if t.detach != nil {
-		t.detach.Stop()
-	}
-}
-
 // close ends the shell and everything it started. The first reason wins; the close is
 // complete when done() is closed.
 func (t *terminal) close(reason string) {
@@ -507,9 +485,6 @@ func (t *terminal) inputHidden() bool { return terminalInputHidden(t.master) }
 // resize sets the window size the shell sees.
 func (t *terminal) resize(rows, cols uint16) error {
 	rows, cols = clampTerminalSize(rows, cols)
-	t.mu.Lock()
-	t.touchLocked()
-	t.mu.Unlock()
 	return setTerminalSize(t.master, rows, cols)
 }
 
@@ -524,7 +499,6 @@ func (t *terminal) send(ctx context.Context, data string) error {
 	defer t.sendMu.Unlock()
 	t.mu.Lock()
 	gone := t.exited || t.reason != ""
-	t.touchLocked()
 	t.mu.Unlock()
 	if gone {
 		return &runErr{http.StatusGone, "the terminal has ended"}

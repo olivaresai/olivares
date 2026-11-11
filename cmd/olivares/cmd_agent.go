@@ -882,6 +882,8 @@ func httpErr(status int, b []byte) error {
 	}
 	var err error = refusal
 	switch {
+	case refusal.code == "edition_required":
+		return exitcode.New(exitcode.Edition, err)
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		return exitcode.New(exitcode.Auth, err)
 	case status == http.StatusNotFound:

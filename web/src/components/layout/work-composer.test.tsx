@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, createTestQueryClient } from '@/test/intel'
@@ -33,6 +33,11 @@ const api = vi.hoisted(() => ({
   getRun: vi.fn(),
   profileModels: vi.fn(),
   activity: vi.fn(),
+  interrupt: vi.fn(),
+  queue: vi.fn(),
+  queueAdd: vi.fn(),
+  uploadAttachment: vi.fn(),
+  inputWithAttachments: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
@@ -60,6 +65,10 @@ vi.mock('@/components/ui/toaster', () => ({ toast: toasts }))
 
 import { ApiError } from '@/lib/api/errors'
 import { sentTurnsOf, useSentTurns } from '@/features/sessions/sent-turns'
+import {
+  CLIENT_SETTING_DEFAULTS,
+  useClientSettings,
+} from '@/features/settings/preferences'
 import { ScopeLine, WorkComposer } from './work-composer'
 import { COMPOSER_INPUT_ID } from './work-composer-id'
 import type { RunDTO } from '@/features/agentops/types'
@@ -113,6 +122,8 @@ beforeEach(() => {
   api.input.mockResolvedValue({ accepted: true })
   api.inputText.mockResolvedValue({ accepted: true })
   api.activity.mockResolvedValue(ACTIVITY)
+  // Before the queue existed the call threw; a mock answering nothing would be read as data.
+  api.queue.mockRejectedValue(new Error('no queue'))
   api.profileModels.mockResolvedValue({
     profile_ref: 'ppf_team',
     driver: 'claude',
@@ -334,10 +345,10 @@ describe('WorkComposer tab drafts', () => {
     view.rerender(composer({ ...RUNNING, run_ref: 'run_other' }))
     view.rerender(composer())
     // The remounted field must not offer the pending message as a new draft.
-    expect(field()).toBeDisabled()
+    expect(field()).toHaveAttribute('readonly')
     expect(screen.getByTestId('composer-send')).toBeDisabled()
     await act(async () => finish({ accepted: true }))
-    await waitFor(() => expect(field()).toBeEnabled())
+    await waitFor(() => expect(field()).not.toHaveAttribute('readonly'))
     expect(api.input).toHaveBeenCalledOnce()
     expect(field()).toHaveValue('')
   })
@@ -483,7 +494,7 @@ describe('WorkComposer tab drafts', () => {
       )
     })
     await act(async () => finish({ accepted: true }))
-    await waitFor(() => expect(field()).toBeEnabled())
+    await waitFor(() => expect(field()).not.toHaveAttribute('readonly'))
     expect(field()).toHaveValue('Dictated afterwards')
   })
 
@@ -797,13 +808,13 @@ describe('WorkComposer layout and disclosure', () => {
     expect(chip.getAttribute('title')).toContain('claude-opus-5-5')
   })
 
-  it('Send is a 32 px round icon button: orange only with text, a quiet ghost otherwise', async () => {
+  it('Send is a 34 px round icon button, 44 px on a phone: orange only with text, a quiet ghost otherwise', async () => {
     const user = userEvent.setup()
     renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
     const send = await screen.findByTestId('composer-send')
     expect(send).toHaveAccessibleName('Send')
     expect(send.className).toContain('rounded-full')
-    expect(send.className).toContain('size-8')
+    expect(send).toHaveClass('size-[var(--density-control)]', 'max-md:size-11')
     expect(send.className).not.toContain('bg-accent ')
     expect(send).toBeDisabled()
     await user.type(screen.getByTestId('launcher-input'), 'hello')
@@ -893,6 +904,75 @@ describe('WorkComposer — attached session input', () => {
         undefined,
       ),
     )
+  })
+
+  it('keeps focus in the field while a message is sent, so the next keystrokes land', async () => {
+    let finish!: (value: { accepted: boolean }) => void
+    api.input.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const field = document.getElementById(COMPOSER_INPUT_ID)!
+    expect(field).toHaveFocus()
+    await user.keyboard('First turn{Enter}')
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    // The pending message stays in the field, locked but not disabled.
+    expect(field).toHaveFocus()
+    expect(field).toHaveAttribute('readonly')
+    expect(field).toBeEnabled()
+    await act(async () => finish({ accepted: true }))
+    await waitFor(() => expect(field).toHaveValue(''))
+    expect(field).not.toHaveAttribute('readonly')
+    await user.keyboard('Next turn')
+    expect(field).toHaveValue('Next turn')
+  })
+
+  it('keeps focus in the field when an approval card arrives while the person types', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(
+      <WorkComposer attached={{ run: RUNNING, group: 'active' }} />,
+    )
+    expect(document.getElementById(COMPOSER_INPUT_ID)).toHaveFocus()
+    await user.keyboard('borra')
+    view.rerender(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, pending_approval_ref: 'apr_typing' },
+          group: 'active',
+        }}
+      />,
+    )
+    const field = document.getElementById(COMPOSER_INPUT_ID)!
+    expect(field).toHaveFocus()
+    await user.keyboard('dor')
+    expect(field).toHaveValue('borrador')
+  })
+
+  it('does not take focus from another control when an approval card arrives', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(
+      <>
+        <button type="button">Elsewhere</button>
+        <WorkComposer attached={{ run: RUNNING, group: 'active' }} />
+      </>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Elsewhere' }))
+    view.rerender(
+      <>
+        <button type="button">Elsewhere</button>
+        <WorkComposer
+          attached={{
+            run: { ...RUNNING, pending_approval_ref: 'apr_elsewhere' },
+            group: 'active',
+          }}
+        />
+      </>,
+    )
+    expect(screen.getByRole('button', { name: 'Elsewhere' })).toHaveFocus()
   })
 
   it('keeps two composers and their submitted turns separate', async () => {
@@ -2021,5 +2101,143 @@ describe('typed approval feedback', () => {
     ).not.toBeInTheDocument()
     expect(screen.getByTestId('composer-send')).toBeDisabled()
     expect(screen.getByTestId('launcher-input')).toBeEnabled()
+  })
+})
+
+// The composer spec (rows 2 to 5 and 7 of the Composer area): recall, a Stop in the
+// composer, a stashed draft, plan first, and the person's choice of send key.
+describe('WorkComposer: the composer spec', () => {
+  const composer = (run = RUNNING) => (
+    <WorkComposer attached={{ run, group: 'active' }} />
+  )
+  const field = () => screen.getByRole('textbox', { name: 'Session turn' })
+
+  beforeEach(() => {
+    useClientSettings.setState({ ...CLIENT_SETTING_DEFAULTS })
+  })
+
+  it('recalls the last sent prompt with ArrowUp in the empty composer, and steps back to empty with ArrowDown', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'Look up the readme')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(field()).toHaveValue(''))
+    await user.click(field())
+    await user.keyboard('{ArrowUp}')
+    expect(field()).toHaveValue('Look up the readme')
+    await user.keyboard('{ArrowDown}')
+    expect(field()).toHaveValue('')
+  })
+
+  it('offers Stop in the composer while a turn runs, and not when the session is idle', async () => {
+    api.interrupt.mockResolvedValue({})
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.click(screen.getByRole('button', { name: 'Interrupt turn' }))
+    await waitFor(() =>
+      expect(api.interrupt).toHaveBeenCalledWith('run_live', undefined),
+    )
+    view.rerender(composer({ ...RUNNING, state: 'idle' }))
+    expect(
+      screen.queryByRole('button', { name: 'Interrupt turn' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('stashes the draft with Ctrl+S and restores it with Ctrl+S in the empty composer', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'half written')
+    await user.keyboard('{Control>}s{/Control}')
+    expect(field()).toHaveValue('')
+    await user.keyboard('{Control>}s{/Control}')
+    expect(field()).toHaveValue('half written')
+  })
+
+  it('keeps the images with a stashed draft and brings them back with it', async () => {
+    api.uploadAttachment.mockResolvedValue({ id: 'att_1' })
+    api.inputWithAttachments.mockResolvedValue({ accepted: true })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    const png = new File([new Uint8Array([0x89, 0x50])], 'shot.png', {
+      type: 'image/png',
+    })
+    fireEvent.paste(field(), {
+      clipboardData: { files: [png], types: ['Files'] },
+    })
+    await screen.findByTestId('attachment-tray')
+    await user.type(field(), 'see this')
+    await user.keyboard('{Control>}s{/Control}')
+    await waitFor(() =>
+      expect(screen.queryByTestId('attachment-tray')).not.toBeInTheDocument(),
+    )
+    expect(field()).toHaveValue('')
+    await user.keyboard('{Control>}s{/Control}')
+    expect(await screen.findByTestId('attachment-tray')).toBeVisible()
+    expect(field()).toHaveValue('see this')
+    await user.keyboard('{Enter}')
+    await waitFor(() =>
+      expect(api.inputWithAttachments).toHaveBeenCalledWith(
+        'run_live',
+        'see this',
+        ['att_1'],
+      ),
+    )
+  })
+
+  it('plans first: Plan hands the next message to the tool under its plan mode, and Plan again goes back', async () => {
+    api.resume.mockResolvedValue({ ...RUNNING, permission_mode: 'plan' })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    const plan = screen.getByRole('button', { name: 'Plan' })
+    expect(plan).toHaveAttribute('aria-pressed', 'false')
+    await user.click(plan)
+    expect(plan).toHaveAttribute('aria-pressed', 'true')
+    await user.type(field(), 'add a flag{Enter}')
+    await waitFor(() =>
+      expect(api.resume).toHaveBeenCalledWith('run_live', 'plan'),
+    )
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+  })
+
+  it('sends with Ctrl+Enter only when the person chose it, and Enter then breaks a line', async () => {
+    useClientSettings.setState({ sendKey: 'modEnter' })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'first line{Enter}second')
+    expect(field()).toHaveValue('first line\nsecond')
+    expect(api.input).not.toHaveBeenCalled()
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+  })
+
+  it('names the keys the person chose in the field while the tool works', async () => {
+    api.queue.mockResolvedValue({ items: [], hold: 'turn', can_steer: true })
+    useClientSettings.setState({ sendKey: 'modEnter' })
+    renderIntel(composer())
+    await waitFor(() =>
+      expect(field()).toHaveAttribute(
+        'placeholder',
+        'Ctrl+Enter queues a message for after this turn',
+      ),
+    )
+  })
+
+  it('steers on Enter, and queues on Ctrl+Enter, when the person chose to steer', async () => {
+    api.queue.mockResolvedValue({
+      items: [],
+      hold: 'turn',
+      can_steer: true,
+    })
+    api.queueAdd.mockResolvedValue({ id: 'q1', text: 'later' })
+    useClientSettings.setState({ sendWhileRunning: 'steer' })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'now{Enter}')
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    expect(api.queueAdd).not.toHaveBeenCalled()
+    await user.type(field(), 'later{Control>}{Enter}{/Control}')
+    await waitFor(() =>
+      expect(api.queueAdd).toHaveBeenCalledWith('run_live', 'later'),
+    )
   })
 })

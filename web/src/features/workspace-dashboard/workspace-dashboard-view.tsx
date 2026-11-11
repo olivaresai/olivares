@@ -243,6 +243,7 @@ function WorkspaceDashboard({
         </div>
         {agentsQ.data?.items.length === 0 ? (
           <EmptyState
+            size="panel"
             title={t('workspaceDashboard:noAgents')}
             description={t('workspaceDashboard:noAgentsHint')}
             action={
@@ -314,6 +315,7 @@ function WorkspaceDashboard({
         </div>
         {groupsQ.data?.items.length === 0 ? (
           <EmptyState
+            size="panel"
             title={t('workspaceDashboard:noGroups')}
             description={t('workspaceDashboard:noGroupsHint')}
             action={

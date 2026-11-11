@@ -100,7 +100,7 @@ func archiveEngine(t *testing.T, driver string, payload []byte, badDigest bool) 
 	if badDigest {
 		digest = strings.Repeat("a", 64)
 	}
-	meta, _ := json.Marshal(map[string]any{"tag_name": tag, "assets": []any{map[string]any{"name": asset, "size": len(payload), "digest": "sha256:" + digest, "browser_download_url": pkg}}})
+	meta, _ := json.Marshal(map[string]any{"tag_name": tag, "assets": []any{map[string]any{"id": 7001, "name": asset, "size": len(payload), "digest": "sha256:" + digest, "browser_download_url": pkg}}})
 	// GitHub's own pages: releases/latest redirects to the tag, and the release's
 	// checksum file (Codex, Ollama) names the archive the way each repository does.
 	var sumsURL string
@@ -141,6 +141,7 @@ func archiveEngine(t *testing.T, driver string, payload []byte, badDigest bool) 
 	if driver == DriverGemini {
 		provider = newReleaseArchive(DriverGemini, ReleaseArchiveOptions{Client: client})
 	}
+	provider.fetch.pause = time.Millisecond // the retry backoff starts at a millisecond, not a second
 	catalog, err := NewCapabilityCatalog(NewCatalog(), provider)
 	if err != nil {
 		t.Fatal(err)
@@ -855,11 +856,12 @@ func TestReleaseArchiveInstallsTheQualifiedOpenCodeWhenGitHubsLimitIsUsedUp(t *t
 	}
 }
 
-// TestReleaseReadsAskAgainOnceAfterAGatewayError: a gateway error (502, 503, 504) or
-// a dropped connection gets one more attempt after a short pause. Any other answer, a
-// failure that would repeat, and a second failure are returned as they came; a second
-// failure names the first, and a read canceled during the pause stops waiting.
-func TestReleaseReadsAskAgainOnceAfterAGatewayError(t *testing.T) {
+// TestReleaseReadsAskAgainWithBackoffAfterAGatewayError: a gateway error (502, 503,
+// 504) or a dropped connection is asked again after a growing pause, up to
+// transientRetries more times. Any other answer and a failure that would repeat are
+// returned as they came; the last failure names the first, and a read canceled during
+// a pause stops waiting.
+func TestReleaseReadsAskAgainWithBackoffAfterAGatewayError(t *testing.T) {
 	type answer func() (int, error)
 	code := func(c int) answer { return func() (int, error) { return c, nil } }
 	fail := func(err error) answer { return func() (int, error) { return 0, err } }
@@ -889,10 +891,10 @@ func TestReleaseReadsAskAgainOnceAfterAGatewayError(t *testing.T) {
 		}
 	}
 	_, status, err, calls := read(context.Background(), time.Millisecond, code(http.StatusGatewayTimeout))
-	if refusal := statusOrTransport(status, u, "source"); status != http.StatusGatewayTimeout || calls != 2 || err != nil || refusal == nil || !strings.Contains(refusal.Error(), "try again in a few minutes") {
-		t.Fatalf("504 twice: status %d calls %d err %v refusal %v", status, calls, err, refusal)
+	if refusal := statusOrTransport(status, u, "source"); status != http.StatusGatewayTimeout || calls != 1+transientRetries || err != nil || refusal == nil || !strings.Contains(refusal.Error(), "try again in a few minutes") {
+		t.Fatalf("504 on every attempt: status %d calls %d err %v refusal %v", status, calls, err, refusal)
 	}
-	if _, _, err, calls = read(context.Background(), time.Millisecond, code(http.StatusGatewayTimeout), fail(syscall.ECONNRESET)); err == nil || !strings.Contains(err.Error(), "first attempt: HTTP 504") || calls != 2 {
+	if _, _, err, calls = read(context.Background(), time.Millisecond, code(http.StatusGatewayTimeout), fail(syscall.ECONNRESET)); err == nil || !strings.Contains(err.Error(), "first attempt: HTTP 504") || calls != 1+transientRetries {
 		t.Fatalf("504 then reset: err %v calls %d", err, calls)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -914,7 +916,7 @@ func TestReleaseReadsAskAgainOnceAfterAGatewayError(t *testing.T) {
 
 // TestReleaseArchivePlansThroughOneGatewayError: one gateway error from GitHub does not
 // fail a Codex plan, on the API metadata read of an exact version or on the checksum
-// route of latest (its redirect and its HEAD); a second one is refused with advice.
+// route of latest (its redirect and its HEAD); one that does not stop is refused with advice.
 func TestReleaseArchivePlansThroughOneGatewayError(t *testing.T) {
 	payload := archiveFixture(t, DriverCodex, nil)
 	plan := func(version string, fails func(*http.Request, map[string]int) int) (*PlanV2, int, error) {
@@ -964,6 +966,60 @@ func TestReleaseArchivePlansThroughOneGatewayError(t *testing.T) {
 	p, api, err := plan(ChannelLatest, flaky)
 	if err != nil || api != 0 || !strings.HasSuffix(p.Selection.Source.Checksums.URL, "/"+releaseChecksumFile(DriverCodex)) {
 		t.Fatalf("latest through a redirect 502 and a HEAD 503: api calls %d err %v", api, err)
+	}
+}
+
+// TestReleaseArchiveInstallSurvivesAGitHubGatewayOutage: a GitHub incident that
+// answers 504 to the first requests of every URL (the release metadata and the
+// package) does not fail the install, and a package download that stays 504 on
+// github.com is fetched from the release-API asset, under the same size and SHA-256.
+func TestReleaseArchiveInstallSurvivesAGitHubGatewayOutage(t *testing.T) {
+	payload := archiveFixture(t, DriverCodex, nil)
+	assetURL := "https://api.github.com/repos/" + releaseRepository(DriverCodex) + "/releases/assets/7001"
+	install := func(outage func(r *http.Request, seen map[string]int) bool) (*ReceiptV2, map[string]int, error) {
+		_, req, client := archiveEngine(t, DriverCodex, payload, false)
+		provider := NewCodexRelease(ReleaseArchiveOptions{Client: client})
+		provider.fetch.pause = time.Millisecond
+		catalog, err := NewCapabilityCatalog(NewCatalog(), provider)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original, seen := client.Transport, map[string]int{}
+		client.Transport = archiveRoundTrip(func(r *http.Request) (*http.Response, error) {
+			seen[r.Method+" "+r.URL.String()]++
+			if outage(r, seen) {
+				return &http.Response{StatusCode: http.StatusGatewayTimeout, Body: http.NoBody, Request: r}, nil
+			}
+			if r.URL.String() == assetURL {
+				if r.Header.Get("Accept") != "application/octet-stream" {
+					return &http.Response{StatusCode: http.StatusUnsupportedMediaType, Body: http.NoBody, Request: r}, nil
+				}
+				return &http.Response{StatusCode: http.StatusOK, ContentLength: int64(len(payload)), Body: io.NopCloser(bytes.NewReader(payload)), Request: r}, nil
+			}
+			return original.RoundTrip(r)
+		})
+		engine := NewEngineWithCapabilities(catalog, EngineOptions{})
+		req.Version = "1.2.3"
+		plan, err := engine.PlanV2(context.Background(), req)
+		if err != nil {
+			return nil, seen, err
+		}
+		receipt, _, err := engine.InstallV2(context.Background(), req, plan, io.Discard)
+		return receipt, seen, err
+	}
+	// Four 504s on every URL, then GitHub answers: metadata and package are read.
+	receipt, _, err := install(func(r *http.Request, seen map[string]int) bool {
+		return r.URL.String() != assetURL && seen[r.Method+" "+r.URL.String()] <= 4
+	})
+	if err != nil || receipt.FetchedObject.SHA256 != sha256Hex(payload) {
+		t.Fatalf("install through four 504s per URL: receipt %+v err %v", receipt, err)
+	}
+	// The package stays 504 on github.com: the release-API asset serves the same bytes.
+	receipt, seen, err := install(func(r *http.Request, _ map[string]int) bool {
+		return r.URL.Host == "github.com" && strings.Contains(r.URL.Path, "/releases/download/") && !strings.HasSuffix(r.URL.Path, "SHA256SUMS")
+	})
+	if err != nil || receipt.FetchedObject.SHA256 != sha256Hex(payload) || seen["GET "+assetURL] != 1 {
+		t.Fatalf("install with the download host down: receipt %+v asset calls %d err %v", receipt, seen["GET "+assetURL], err)
 	}
 }
 

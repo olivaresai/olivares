@@ -58,7 +58,9 @@
     "truncated": "显示前 200 个文件或分支。缩小更改范围后请刷新。",
     "fileStatus": "索引：{{index}}；工作区：{{worktree}}",
     "commitHint": "仅提交已暂存的更改，使用个人资料中的姓名和邮箱。",
-    "working": "正在处理…"
+    "working": "正在处理…",
+    "nothingStaged": "尚未暂存任何内容。暂存文件后即可提交。",
+    "noMessage": "请填写提交说明。"
   },
   "title": "会话",
   "refresh": "刷新",
@@ -602,10 +604,18 @@
       "todos": "待办列表（已完成 {{done}}/{{total}}）",
       "send": "发送回答",
       "answered": "已发送回答：{{answer}}",
-      "sendFailed": "无法发送回答。"
-    }
+      "sendFailed": "无法发送回答。",
+      "implement": "执行",
+      "implementText": "请执行这个计划。"
+    },
+    "cite": "引用到输入框"
   },
   "changes": {
+    "scope": "更改范围",
+    "session": "自会话开始",
+    "latest": "最新轮次",
+    "before": "更改前",
+    "after": "更改后",
     "title": "{{folder}} 中的更改",
     "titleNoFolder": "更改",
     "hint": "自本次会话开始以来，智能体在其文件夹中更改的文件。",
@@ -692,6 +702,16 @@
       "empty": "请写下评论。",
       "atBase": "在起点",
       "atTip": "在分支末端"
+    },
+    "folder": {
+      "title": "未提交的更改",
+      "since": "自 <branch /> 上的最近一次提交以来。",
+      "sinceCommit": "自最近一次提交（{{base}}）以来。",
+      "empty": "自最近一次提交以来没有更改。",
+      "noCommit": "此文件夹还没有任何提交，因此没有可比较的内容。",
+      "original": "最近一次提交中",
+      "modified": "文件夹中",
+      "fileTruncated": "每一侧仅显示开头部分。"
     }
   },
   "peers": {
@@ -877,11 +897,14 @@
     "scriptsFailed": "无法读取项目脚本。",
     "stopScript": "停止",
     "title": "终端",
+    "maximize": "最大化终端",
+    "restore": "恢复终端大小",
     "hint": "在此会话文件夹中运行的 shell，受与会话相同的限制，以你的身份运行；你输入的每一条命令行都会被记录。",
     "open": "打开终端",
-    "close": "关闭",
     "copy": "复制",
     "paste": "粘贴",
+    "selectAll": "全选",
+    "jumpToLatest": "跳到最新",
     "again": "打开新终端",
     "reconnecting": "正在重新连接…",
     "ended": "终端已结束。",
@@ -894,7 +917,8 @@
       "step_up": "请先确认你的身份，然后再次打开终端。",
       "refused": "你无权在此文件夹中打开终端。",
       "busy": "打开的终端太多了，请先关闭一个。",
-      "failed": "无法打开终端，请稍后再试。"
+      "failed": "无法打开终端，请稍后再试。",
+      "unsafe": "该命令未执行：其中含有可能被当作按键的控制字符或隐藏字符。"
     },
     "keys": {
       "esc": "Esc",
@@ -903,7 +927,27 @@
       "up": "上",
       "down": "下"
     },
-    "closeLabel": "关闭终端"
+    "starting": "正在启动…",
+    "list": "终端",
+    "new": "新建终端",
+    "split": "拆分",
+    "unsplit": "关闭拆分",
+    "search": "搜索",
+    "actions": "终端操作",
+    "searchLabel": "在终端中搜索",
+    "searchPrevious": "上一个匹配项",
+    "searchNext": "下一个匹配项",
+    "rename": "重命名终端",
+    "renameHint": "双击重命名",
+    "closeNamed": "关闭 {{name}}",
+    "closeTitle": "关闭 {{name}}？",
+    "closeBody": "这将结束该 shell 及其启动的所有进程。",
+    "closeConfirm": "关闭终端",
+    "sendToAgent": "发送给智能体",
+    "sendToAgentHint": "将所选输出放入你的消息，发送前可编辑。",
+    "contextLabel": "{{name}} 的输出：",
+    "drawer": "终端抽屉",
+    "runInTerminal": "在终端中运行"
   },
   "strip": {
     "needYou_other": "{{count}} 个需要你处理",

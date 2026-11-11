@@ -75,6 +75,7 @@ import {
   type SentTurn,
 } from './sent-turns'
 import { useConversationTasks } from './use-conversation-tasks'
+import { SelectionCite } from './selection-cite'
 import './i18n'
 
 /** Past this many frames read here, the oldest SETTLE_FRAMES join the folded base the stored conversation
@@ -136,6 +137,7 @@ function ConversationBody({
     frames: AttachFrame[]
   }>({ settled: [], frames: [] })
   const { settled, frames } = read
+  const [delta, setDelta] = useState<AttachFrame | null>(null)
   // The stored conversation before the frames read here: every earlier turn, from the tool's own record.
   const [history, setHistory] = useState<string[]>([])
   const [dropped, setDropped] = useState(0)
@@ -230,6 +232,7 @@ function ConversationBody({
     enabled: !isRemote,
     sessionKey: [run.state, run.transport, run.started_at].join(':'),
     onFrame,
+    onDelta: setDelta,
     onHistory: setHistory,
     onLag,
     tail: PAGE_FRAMES,
@@ -256,12 +259,12 @@ function ConversationBody({
   const items = useMemo(
     () =>
       mapConversationFrames(
-        frames.map((f) => f.line),
+        [...frames.map((f) => f.line), ...(delta ? [delta.line] : [])],
         frames.map((f) => f.at),
         frames.map((f) => f.seq),
         restored,
       ).filter((item) => item.systemKind !== 'protocol' && !isQuiet(item)),
-    [frames, restored],
+    [frames, restored, delta],
   )
   const contextItems = useRef(items)
   useLayoutEffect(() => {
@@ -615,6 +618,7 @@ function ConversationBody({
       className="group/conv relative flex min-h-0 flex-1 flex-col gap-2"
       data-testid="session-conversation"
     >
+      <SelectionCite root={scrollRef} onCite={quote} />
       {dropped > 0 ? (
         <p className="text-caption text-warning">
           {t('conversation.lag', { count: dropped })}

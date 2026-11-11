@@ -92,7 +92,7 @@ export interface RosterMemberDTO {
   user_id: string
   email: string
   display_name?: string
-  status: 'active' | 'inactive' | 'error'
+  status: 'active' | 'inactive' | 'error' | 'suspended'
   external_id?: string
   sso_only: boolean
   second_factor_enrolled?: boolean
@@ -719,6 +719,8 @@ export interface GroupDTO {
    *  (organization-wide) or concealed from a workspace-confined caller. */
   workspace_id?: string
   members: number
+  /** The ids of the group's people; absent for a caller confined to a department. */
+  member_ids?: string[]
 }
 
 /** One (scope, grantable-perms) pair the actor may delegate within. */
@@ -1280,6 +1282,12 @@ export const consoleApi = {
    * its other organizations stay). Every edition serves it. */
   removeMember: (userId: string) =>
     http.delete<void>(`/v1/members/${encodeURIComponent(userId)}`),
+  /** Business: suspend a member (sessions and tokens stop at once; membership, role and
+   * groups stay) or give the access back. */
+  setMemberSuspended: (userId: string, suspended: boolean) =>
+    http.post<void>(
+      `/v1/members/${encodeURIComponent(userId)}/${suspended ? 'suspend' : 'reactivate'}`,
+    ),
 
   // Internal-superadmin lifecycle (global, superadmin-gated; writes need an
   // AAL3 step-up). List the superadmin accounts (with active/inactive status) and
@@ -1670,6 +1678,19 @@ export const consoleApi = {
       `/v1/groups/${encodeURIComponent(id)}/role`,
       { role },
     ),
+
+  // Business: a group of the operator's own, and its people (provisioned_by "operator").
+  createGroup: (displayName: string) =>
+    http.post<{ id: string; display_name: string; provisioned_by: string }>(
+      '/v1/groups',
+      { display_name: displayName },
+    ),
+  deleteGroup: (id: string) =>
+    http.delete<void>(`/v1/groups/${encodeURIComponent(id)}`),
+  setGroupMember: (groupId: string, userId: string, member: boolean) => {
+    const path = `/v1/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`
+    return member ? http.put<void>(path) : http.delete<void>(path)
+  },
 
   // Agent-axis picker: read-only roster for binding authoring.
   listAgents: (

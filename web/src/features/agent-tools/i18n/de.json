@@ -158,7 +158,11 @@
     "default": "Standardanmeldung",
     "readFailed": "Die Profile konnten nicht gelesen werden.",
     "truncated": "Einige Profile werden nicht angezeigt.",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "turnOff": "{{name}} ausschalten",
+    "turnOn": "{{name}} einschalten",
+    "switchedOn": "{{name}} ist an",
+    "switchedOff": "{{name}} ist aus"
   },
   "tool": {
     "menu": "Optionen für {{name}}",
@@ -260,5 +264,30 @@
     "accounts": "Konten",
     "allAccounts": "Alle Konten: Details, Beschriftungen und Bindungen",
     "noAccess": "Ihre Rolle kann die Konten und API-Schlüssel dieser Organisation nicht lesen."
+  },
+  "runtime": {
+    "title": "Laufzeit",
+    "autoCompact": "Automatisch verdichten nach",
+    "autoCompactHint": "Verdichten nach 100.000 bis 1.000.000 Tokens. Leer lassen, um den Standard von Claude zu verwenden.",
+    "autoCompactPlaceholder": "z. B. 300000",
+    "autoCompactInvalid": "Geben Sie eine ganze Zahl von 100000 bis 1000000 ein oder lassen Sie das Feld leer.",
+    "saved": "Laufzeit gespeichert. Neue Sitzungen verwenden sie."
+  },
+  "models": {
+    "title": "Modelle",
+    "note": "Nur Sie sehen diese Liste. Ein ausgeblendetes Modell verschwindet aus den Auswahllisten; der Standard des Werkzeugs und ein eingetipptes Modell funktionieren weiterhin.",
+    "filter": "Modelle filtern",
+    "disableAll": "Alle ausblenden",
+    "enableAll": "Alle anzeigen",
+    "addCustom": "Eigenes Modell hinzufügen",
+    "customPlaceholder": "Modell-ID, z. B. claude-opus-5-5",
+    "customInvalid": "Eine Modell-ID enthält keine Leerzeichen und hat höchstens 200 Zeichen.",
+    "add": "Hinzufügen",
+    "fast": "Schnellmodus",
+    "up": "{{name}} nach oben",
+    "down": "{{name}} nach unten",
+    "use": "{{name}} anzeigen",
+    "removeCustom": "{{name}} entfernen",
+    "empty": "Dieses Werkzeug meldet keine Modelle. Fügen Sie die hinzu, die Sie verwenden."
   }
 }

@@ -64,13 +64,24 @@ export function countChangedLines(hunks: readonly string[]): {
 }
 
 /** Counts for the rail. Empty or binary files have none. A cut file is partial. */
-export function lineCount(file: {
-  binary: boolean
-  truncated: boolean
-  hunks: readonly string[]
-}): LineCount | null {
+export function lineCount(
+  file: {
+    binary: boolean
+    truncated: boolean
+    hunks: readonly string[]
+  },
+  ignoreWhitespace = false,
+): LineCount | null {
   if (file.binary || file.hunks.length === 0) return null
-  const counts = countChangedLines(file.hunks)
+  const counts = ignoreWhitespace
+    ? parseHunks(file.hunks, true).reduce(
+        (count, row) => ({
+          added: count.added + Number(row.kind === 'added'),
+          removed: count.removed + Number(row.kind === 'removed'),
+        }),
+        { added: 0, removed: 0 },
+      )
+    : countChangedLines(file.hunks)
   if (!file.truncated && counts.added === 0 && counts.removed === 0) return null
   return { ...counts, partial: file.truncated }
 }
@@ -91,11 +102,15 @@ export type DiffRow =
       newLine: number | null
       text: string
       marker: '+' | '−' | ' '
+      originalText?: string
     }
 
 const HUNK_START = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/
 
-export function parseHunks(hunks: readonly string[]): DiffRow[] {
+export function parseHunks(
+  hunks: readonly string[],
+  ignoreWhitespace = false,
+): DiffRow[] {
   const rows: DiffRow[] = []
   for (const hunk of hunks) {
     let oldLine = 0
@@ -145,7 +160,51 @@ export function parseHunks(hunks: readonly string[]): DiffRow[] {
       }
     }
   }
-  return rows
+  return ignoreWhitespace ? withoutWhitespaceChanges(rows) : rows
+}
+
+/** Keep real line numbers and text; only unmark paired edits that change spacing alone. */
+function withoutWhitespaceChanges(rows: DiffRow[]): DiffRow[] {
+  type Line = Exclude<DiffRow, { kind: 'hunk' }>
+  const result: DiffRow[] = []
+  for (let i = 0; i < rows.length;) {
+    if (rows[i].kind !== 'removed') {
+      result.push(rows[i++])
+      continue
+    }
+    const before: Line[] = [],
+      after: Line[] = []
+    while (i < rows.length) {
+      const row = rows[i]
+      if (row.kind !== 'removed') break
+      before.push(row)
+      i++
+    }
+    while (i < rows.length) {
+      const row = rows[i]
+      if (row.kind !== 'added') break
+      after.push(row)
+      i++
+    }
+    if (before.length === after.length) {
+      before.forEach((row, index) => {
+        const next = after[index]
+        if (
+          row.text.replace(/[ \t]/g, '') === next.text.replace(/[ \t]/g, '')
+        ) {
+          result.push({
+            kind: 'context',
+            oldLine: row.oldLine,
+            newLine: next.newLine,
+            text: next.text,
+            originalText: row.text,
+            marker: ' ',
+          })
+        } else result.push(row, next)
+      })
+    } else result.push(...before, ...after)
+  }
+  return result
 }
 
 /** Which bound the response-level truncated flag is naming. */

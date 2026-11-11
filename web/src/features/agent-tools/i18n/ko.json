@@ -158,7 +158,11 @@
     "default": "기본 로그인",
     "readFailed": "프로필을 읽을 수 없습니다.",
     "truncated": "일부 프로필이 표시되지 않습니다.",
-    "retry": "다시 시도"
+    "retry": "다시 시도",
+    "turnOff": "{{name}} 끄기",
+    "turnOn": "{{name}} 켜기",
+    "switchedOn": "{{name}}을(를) 켰습니다",
+    "switchedOff": "{{name}}을(를) 껐습니다"
   },
   "tool": {
     "menu": "{{name}} 옵션",
@@ -260,5 +264,30 @@
     "accounts": "계정",
     "allAccounts": "모든 계정: 세부 정보, 레이블, 바인딩",
     "noAccess": "현재 역할로는 이 조직의 계정과 API 키를 읽을 수 없습니다."
+  },
+  "runtime": {
+    "title": "런타임",
+    "autoCompact": "자동 압축 시점",
+    "autoCompactHint": "100,000~1,000,000 토큰에서 압축합니다. 비워 두면 Claude의 기본값을 사용합니다.",
+    "autoCompactPlaceholder": "예: 300000",
+    "autoCompactInvalid": "100000~1000000 사이의 정수를 입력하거나 비워 두세요.",
+    "saved": "런타임을 저장했습니다. 새 세션부터 적용됩니다."
+  },
+  "models": {
+    "title": "모델",
+    "note": "이 목록은 나에게만 보입니다. 숨긴 모델은 선택 목록에서 빠지지만 도구의 기본값과 직접 입력한 모델은 계속 사용할 수 있습니다.",
+    "filter": "모델 필터",
+    "disableAll": "모두 숨기기",
+    "enableAll": "모두 표시",
+    "addCustom": "사용자 지정 모델 추가",
+    "customPlaceholder": "모델 ID, 예: claude-opus-5-5",
+    "customInvalid": "모델 ID에는 공백이 없고 최대 200자입니다.",
+    "add": "추가",
+    "fast": "빠른 모드",
+    "up": "{{name}} 위로 이동",
+    "down": "{{name}} 아래로 이동",
+    "use": "{{name}} 표시",
+    "removeCustom": "{{name}} 제거",
+    "empty": "이 도구는 모델을 알려 주지 않습니다. 사용하는 모델을 추가하세요."
   }
 }

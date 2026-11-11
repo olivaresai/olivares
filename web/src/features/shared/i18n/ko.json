@@ -53,5 +53,17 @@
     "same": "HEAD와 차이가 없습니다.",
     "view": "보기",
     "unavailable": "HEAD와 비교하지 못했습니다."
+  },
+  "diff": {
+    "layout": "차이 보기",
+    "unified": "통합",
+    "split": "분할",
+    "wrap": "줄 바꿈",
+    "whitespace": "공백 변경 무시",
+    "maximize": "최대화",
+    "restore": "크기 복원",
+    "reviewed": "검토 완료",
+    "working": "작업 트리",
+    "branch": "브랜치"
   }
 }

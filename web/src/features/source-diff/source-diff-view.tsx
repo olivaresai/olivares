@@ -5,6 +5,13 @@ import { useQuery } from '@tanstack/react-query'
 import { AppLink } from '@/components/ui/app-link'
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
+import { DiffControls } from '@/components/ui/diff-controls'
+import {
+  usePreferencesStore,
+  useReviewed,
+  type DiffDisplay,
+} from '@/stores/preferences'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { CopyStatus } from '@/components/ui/copy-button'
 import { PageHeader } from '@/components/ui/page-header'
@@ -69,7 +76,10 @@ function readClock(): number {
   return Date.now()
 }
 
-function keptSummary(files: readonly GitHostDiffFile[]): {
+function keptSummary(
+  files: readonly GitHostDiffFile[],
+  ignoreWhitespace: boolean,
+): {
   added: number
   removed: number
   partial: boolean
@@ -79,7 +89,7 @@ function keptSummary(files: readonly GitHostDiffFile[]): {
   let partial = false
   let seen = false
   for (const item of files) {
-    const count = lineCount(item)
+    const count = lineCount(item, ignoreWhitespace)
     if (!count) continue
     seen = true
     added += count.added
@@ -101,6 +111,7 @@ export function SourceDiffView({
 }) {
   const { t } = useTranslation(['source-diff', 'nav'])
   const activeTenant = useTenantStore((state) => state.activeTenant)
+  const ignoreWhitespace = usePreferencesStore((s) => s.diffDisplay.whitespace)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [windowStart, setWindowStart] = useState(0)
   const optionNodes = useRef<Array<HTMLDivElement | null>>([])
@@ -134,7 +145,7 @@ export function SourceDiffView({
   const failure = result.error instanceof SourceDiffError ? result.error : null
   const data = failure?.kind === 'forbidden' ? undefined : result.data
   const files = useMemo(() => data?.files ?? [], [data])
-  const summary = data ? keptSummary(files) : null
+  const summary = data ? keptSummary(files, ignoreWhitespace) : null
   const waitingOnRead = queryComplete(query) && result.isPending
   const selected = files[Math.min(selectedIndex, Math.max(files.length - 1, 0))]
 
@@ -178,7 +189,10 @@ export function SourceDiffView({
         const current =
           files[Math.min(selectedIndex, Math.max(files.length - 1, 0))]
         if (!current) return
-        const rows = parseHunks(current.hunks)
+        const rows = parseHunks(
+          current.hunks,
+          usePreferencesStore.getState().diffDisplay.whitespace,
+        )
         const direction = command === 'sourceDiff.nextHunk' ? 1 : -1
         setWindowStart((start) => nextHunk(rows, start, direction))
       }
@@ -330,6 +344,7 @@ export function SourceDiffView({
             </p>
           </div>
           <FileDiff
+            key={identity}
             file={selected}
             windowStart={windowStart}
             onWindowStart={setWindowStart}
@@ -376,7 +391,8 @@ function FileOption({
   optionRef: (node: HTMLDivElement | null) => void
 }) {
   const { t } = useTranslation('source-diff')
-  const count = lineCount(file)
+  const ignoreWhitespace = usePreferencesStore((s) => s.diffDisplay.whitespace)
+  const count = lineCount(file, ignoreWhitespace)
   const outline =
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
   return (
@@ -427,8 +443,13 @@ function FileDiff({
 }) {
   const { t } = useTranslation('source-diff')
   const { state: copyState, copy } = useCopy()
+  const display = usePreferencesStore((s) => s.diffDisplay)
+  const [reviewed, setReviewed] = useReviewed(
+    `source-diff:${file.path}`,
+    JSON.stringify(file),
+  )
   const title = fileTitle(file)
-  const rows = parseHunks(file.hunks)
+  const rows = parseHunks(file.hunks, display.whitespace)
   const bounds = windowBounds(rows.length, windowStart)
   const visible = rows.slice(bounds.start, bounds.end)
   const removedWithoutPatch =
@@ -453,6 +474,16 @@ function FileDiff({
       <div className="sticky top-0 z-10 flex items-center gap-2 bg-surface py-2">
         <PathText value={fileTitle(file)} copyValue={file.path} />
         <span className="text-sm">{statusLabel(file.status, t)}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 py-2">
+        <DiffControls />
+        <label className="flex items-center gap-2 text-caption">
+          <Checkbox
+            checked={reviewed}
+            onCheckedChange={(checked) => setReviewed(checked === true)}
+          />
+          {t('shared:diff.reviewed')}
+        </label>
       </div>
       <CopyStatus
         state={copyState}
@@ -485,7 +516,9 @@ function FileDiff({
         </Button>
       )}
       {!file.binary && !removedWithoutPatch && rows.length > 0 && (
-        <table className="w-max min-w-full border-collapse font-mono text-xs">
+        <table
+          className={`${display.wrap ? 'w-full table-fixed' : 'w-max min-w-full'} border-collapse font-mono text-xs`}
+        >
           <caption className="sr-only">
             <Trans
               i18nKey="diffLabelRich"
@@ -496,33 +529,57 @@ function FileDiff({
             />
           </caption>
           <thead>
-            <tr>
-              <th
-                scope="col"
-                className="px-2 text-right font-sans text-muted-foreground"
-              >
-                {t('colOld')}
-              </th>
-              <th
-                scope="col"
-                className="px-2 text-right font-sans text-muted-foreground"
-              >
-                {t('colNew')}
-              </th>
-              <th scope="col" className="px-2 font-sans text-muted-foreground">
-                {t('colChange')}
-              </th>
-              <th
-                scope="col"
-                className="px-2 text-left font-sans text-muted-foreground"
-              >
-                {t('colText')}
-              </th>
-            </tr>
+            {display.layout === 'split' ? (
+              <tr>
+                <th scope="col" className="w-12 px-2 text-right">
+                  {t('colOld')}
+                </th>
+                <th scope="col" className="px-2 text-left">
+                  {t('colText')}
+                </th>
+                <th scope="col" className="w-12 px-2 text-right">
+                  {t('colNew')}
+                </th>
+                <th scope="col" className="px-2 text-left">
+                  {t('colText')}
+                </th>
+              </tr>
+            ) : (
+              <tr>
+                <th
+                  scope="col"
+                  className="px-2 text-right font-sans text-muted-foreground"
+                >
+                  {t('colOld')}
+                </th>
+                <th
+                  scope="col"
+                  className="px-2 text-right font-sans text-muted-foreground"
+                >
+                  {t('colNew')}
+                </th>
+                <th
+                  scope="col"
+                  className="px-2 font-sans text-muted-foreground"
+                >
+                  {t('colChange')}
+                </th>
+                <th
+                  scope="col"
+                  className="px-2 text-left font-sans text-muted-foreground"
+                >
+                  {t('colText')}
+                </th>
+              </tr>
+            )}
           </thead>
           <tbody>
             {visible.map((row, index) => (
-              <DiffLine key={`${bounds.start + index}`} row={row} />
+              <DiffLine
+                key={`${bounds.start + index}`}
+                row={row}
+                display={display}
+              />
             ))}
           </tbody>
         </table>
@@ -531,7 +588,7 @@ function FileDiff({
   )
 }
 
-function DiffLine({ row }: { row: DiffRow }) {
+function DiffLine({ row, display }: { row: DiffRow; display: DiffDisplay }) {
   const { t } = useTranslation('source-diff')
   if (row.kind === 'hunk') {
     return (
@@ -564,6 +621,43 @@ function DiffLine({ row }: { row: DiffRow }) {
       : row.kind === 'removed'
         ? 'text-bad'
         : ''
+  const text = row.text
+  const textClass = `${display.wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'} px-2`
+  if (display.layout === 'split')
+    return (
+      <tr>
+        <td
+          className={`px-2 text-right text-muted-foreground ${row.kind === 'removed' ? tone : ''}`}
+        >
+          {row.oldLine ?? ''}
+        </td>
+        <td className={`${textClass} ${row.kind === 'removed' ? tone : ''}`}>
+          {row.kind !== 'added' ? (
+            <>
+              <span className="sr-only">{spoken} </span>
+              {row.kind === 'removed' ? (
+                <span aria-hidden="true">− </span>
+              ) : null}
+              {row.originalText ?? text}
+            </>
+          ) : null}
+        </td>
+        <td
+          className={`px-2 text-right text-muted-foreground ${row.kind === 'added' ? tone : ''}`}
+        >
+          {row.newLine ?? ''}
+        </td>
+        <td className={`${textClass} ${row.kind === 'added' ? tone : ''}`}>
+          {row.kind !== 'removed' ? (
+            <>
+              <span className="sr-only">{spoken} </span>
+              {row.kind === 'added' ? <span aria-hidden="true">+ </span> : null}
+              {text}
+            </>
+          ) : null}
+        </td>
+      </tr>
+    )
   return (
     <tr className={tone}>
       <td className="px-2 text-right text-muted-foreground">
@@ -576,7 +670,7 @@ function DiffLine({ row }: { row: DiffRow }) {
         <span className="sr-only">{spoken} </span>
         {row.marker}
       </td>
-      <td className="whitespace-pre px-2">{row.text}</td>
+      <td className={textClass}>{text}</td>
     </tr>
   )
 }

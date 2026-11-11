@@ -104,6 +104,15 @@ beforeEach(() => {
         })
       if (path === '/v1/m/sessions/live')
         return Response.json({ items: [], has_more: false })
+      // The shell's own read: the navigation asks it which edition is held here.
+      if (path === '/v1/server-info')
+        return Response.json({
+          version: 'v-test-notifications',
+          engine: 'sqlite',
+          setup_required: false,
+          edition: 'community',
+          license: { status: 'none', licensee: '' },
+        })
       throw new Error(`Unexpected read: ${path}`)
     }),
   )

@@ -1,9 +1,22 @@
 {
   "edition": {
     "viewPolicy": "Richtlinie anzeigen",
-    "editingRequiresBusiness": "Das Bearbeiten eigener Richtlinien, Rollen und Berechtigungen erfordert Business.",
+    "editingRequiresBusiness": "Das Bearbeiten eigener Richtlinien, Rollen und Berechtigungen erfordert Olivares AI Business.",
     "disablePolicy": "Richtlinie deaktivieren",
-    "disablePolicyDescription": "Die verfasste Richtlinie wird nicht mehr angewendet. Ihr Verlauf und andere durchgesetzte Richtlinien bleiben erhalten."
+    "disablePolicyDescription": "Die verfasste Richtlinie wird nicht mehr angewendet. Ihr Verlauf und andere durchgesetzte Richtlinien bleiben erhalten.",
+    "note": {
+      "line": "{{capability}} ist Teil von {{edition}}. Fügen Sie unter <0>Einstellungen > Edition</0> eine Lizenz hinzu oder besuchen Sie <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "Dies ist Teil von {{edition}}. Fügen Sie unter <0>Einstellungen > Edition</0> eine Lizenz hinzu oder besuchen Sie <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} ist Teil von {{edition}}. Wenden Sie sich an einen Administrator.",
+      "lineUnnamedAsk": "Dies ist Teil von {{edition}}. Wenden Sie sich an einen Administrator.",
+      "readsBelow": "Was bereits gespeichert ist, bleibt lesbar und exportierbar.",
+      "tag": "Teil von {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skills",
+      "sso": "Single Sign-on",
+      "approvalTiers": "Das Ändern der Risikostufe oder der Anzahl der Genehmigungen einer Aktion"
+    }
   },
   "errors": {
     "generic": "Etwas ist schiefgelaufen"
@@ -113,14 +126,6 @@
     "peopleHint": "Geben Sie einen Namen ein.",
     "ask": "Olivares fragen …"
   },
-  "hintBar": {
-    "move": "bewegen",
-    "open": "öffnen",
-    "approve": "genehmigen",
-    "deny": "ablehnen",
-    "launcher": "Starter",
-    "command": "Befehle"
-  },
   "permissionWords": {
     "read": "Lesezugriff",
     "write": "Schreibzugriff",
@@ -218,6 +223,7 @@
   "notifications": {
     "title": "Letzte Aktivität",
     "empty": "Keine aktuelle Aktivität.",
+    "auditOnly": "Die letzte Aktivität wird Personen angezeigt, die das Audit-Ledger lesen dürfen.",
     "viewAll": "Alles im Audit-Ledger anzeigen",
     "events": {
       "auditCheckpoint": "Audit-Prüfpunkt erstellt",
@@ -323,7 +329,8 @@
       "launcher": {
         "focus": "Zum Starter springen",
         "start": "Sitzung starten",
-        "startBackground": "Starten und hier bleiben"
+        "startBackground": "Starten und hier bleiben",
+        "stash": "Entwurf beiseitelegen oder zurückholen"
       },
       "surface": {
         "openBeside": "Daneben öffnen",
@@ -372,7 +379,9 @@
       },
       "ask": {
         "open": "Olivares fragen"
-      }
+      },
+      "shell.sidebar": "Seitenleiste umschalten",
+      "shell.panel": "Seitenpanel umschalten"
     },
     "when": {
       "railFocused": "in der Sitzungsleiste",

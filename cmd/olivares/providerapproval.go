@@ -43,7 +43,20 @@ func (a providerApprovalAdapter) Approve(ctx context.Context, tenant model.Tenan
 	// Requested grants remain the original authority; only display facts leave the
 	// child. The same projection used by the policy ledger protects this queue.
 	granted := append([]string(nil), req.Requested...)
-	sessionScopeAllowed := req.SessionScopeAllowed
+	sessionScopeAllowed := false
+	allowanceKey := ""
+	if req.Principal.SessionScope() == tenant && req.FactsComplete && (req.CommandLine != "" || len(req.FilePaths) != 0) {
+		encoded, err := json.Marshal(struct {
+			Driver, Run, Method, Kind, ToolKind, Command string
+			Paths, Permissions                           []string
+			Fence                                        any
+		}{req.Driver, req.RunRef, req.Method, req.Kind, req.ToolKind, providerEffectiveFacts(req).CommandLine, providerEffectiveFacts(req).FilePaths, req.Requested, req.Principal.SessionFence})
+		if err != nil {
+			return sessions.ProviderApprovalDecision{}, err
+		}
+		allowanceKey = hexSHA(string(encoded))
+		sessionScopeAllowed = true
+	}
 	effective := providerEffectiveFacts(req)
 	if a.reviewFacts != nil {
 		reviewed, err := a.reviewFacts(ctx, tenant, req)
@@ -116,7 +129,7 @@ func (a providerApprovalAdapter) Approve(ctx context.Context, tenant model.Tenan
 		Tenant: tenant, Principal: req.Principal,
 		// These offsets belong to pre-pattern bytes. Request applies the same shared
 		// cleaner once; carrying offsets against display would be invalid provenance.
-		Request:  governance.ApprovalRequest{Action: action, SubjectKind: kind, SubjectRef: subject, Reason: reason, ReasonMasks: reasonMasks, Review: review, ReviewMasks: reviewMasks, SessionRef: req.SessionRef, ExpiresInSeconds: cred.ExpiresIn, EscalateInSeconds: cred.EscalateIn, SessionScopeAllowed: sessionScopeAllowed},
+		Request:  governance.ApprovalRequest{Action: action, SubjectKind: kind, SubjectRef: subject, Reason: reason, ReasonMasks: reasonMasks, Review: review, ReviewMasks: reviewMasks, SessionRef: req.SessionRef, ExpiresInSeconds: cred.ExpiresIn, EscalateInSeconds: cred.EscalateIn, SessionScopeAllowed: sessionScopeAllowed, SessionAllowanceKey: allowanceKey},
 		Consumer: consumer, Wait: a.approvalWait, Log: a.bridge.Log,
 		Shown: func(approval governance.Approval) bool {
 			return approval.Reason == display && (review == nil || approval.Review != nil && approval.Review.Tool == review.Tool && approval.Review.Text == reviewDisplay)
@@ -130,23 +143,8 @@ func (a providerApprovalAdapter) Approve(ctx context.Context, tenant model.Tenan
 	}
 	switch effect.Outcome {
 	case effectAllowed:
-		// A quorum cannot broaden the least permissive human's decision. The
-		// immutable trail is read only after the existing single-use spend succeeds.
-		sessionScope := false
-		if sessionScopeAllowed {
-			decisions, err := a.bridge.LocalProposer.Decisions(ctx, tenant, effect.Ref)
-			if err != nil {
-				return sessions.ProviderApprovalDecision{}, err
-			}
-			sessionScope = len(decisions) != 0
-			for _, decision := range decisions {
-				if decision.Decision != "approve" || decision.Scope != "session" {
-					sessionScope = false
-					break
-				}
-			}
-		}
-		return sessions.ProviderApprovalDecision{Allow: true, Granted: granted, SessionScope: sessionScope}, nil
+		// Olivares retains and rechecks session allowances; the provider gets one use.
+		return sessions.ProviderApprovalDecision{Allow: true, Granted: granted}, nil
 	case effectUnshown:
 		return sessions.ProviderApprovalDecision{Reason: "permission scope changed during review"}, nil
 	case effectForeign:

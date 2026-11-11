@@ -10,6 +10,19 @@
     "unavailableDescription": "A leitura das sessões não obteve resposta. Os valores do parque acima não são afetados.",
     "untitled": "Sessão sem título"
   },
+  "folders": {
+    "title": "As suas pastas",
+    "start": "Começar",
+    "startIn": "Começar em {{folder}}",
+    "canWork": "Pode trabalhar",
+    "readOnly": "Só de leitura",
+    "showAll": "Mostrar todas as pastas ({{total}})",
+    "loading": "A carregar as suas pastas",
+    "emptyTitle": "Ainda não tem pastas",
+    "emptyDescription": "Quando o seu administrador lhe der acesso a uma pasta, ela aparecerá aqui.",
+    "unavailableTitle": "Não foi possível carregar as suas pastas",
+    "unavailableDescription": "As suas sessões abaixo não são afetadas."
+  },
   "empty": {
     "title": "Ainda nada para mostrar",
     "description": "A sua função não concede acesso de leitura a nenhum módulo do parque. Peça a um administrador acesso de leitura para ver a visão geral."

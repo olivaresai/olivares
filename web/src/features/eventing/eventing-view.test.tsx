@@ -354,7 +354,7 @@ describe('EventingView sink profile (E3b)', () => {
     const dialog = await screen.findByRole('dialog')
     expect(
       within(dialog).queryByText(
-        'SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them.',
+        'SIEM delivery and external telemetry export require Olivares AI Business. Stored settings are preserved; Olivares AI Community does not send them.',
       ) !== null,
     ).toBe(!PANEL_EXTENSIONS.operationsExportAvailable)
     await user.click(

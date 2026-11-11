@@ -5,10 +5,12 @@
 // CodeDiff — side-by-side read-only diff of two policy revisions (version/diff).
 // Built on @codemirror/merge (same CSP/Trusted-Types-clean engine as CodeEditor).
 // Both panes are read-only; this is a viewer, never an authoring surface.
-import { MergeView } from '@codemirror/merge'
-import { EditorState } from '@codemirror/state'
+import { MergeView, unifiedMergeView, diff } from '@codemirror/merge'
+import { EditorState, Prec } from '@codemirror/state'
 import { EditorView, lineNumbers } from '@codemirror/view'
 import { useEffect, useRef } from 'react'
+import { usePreferencesStore } from '@/stores/preferences'
+import { DiffControls } from './diff-controls'
 import { cn } from '@/lib/utils'
 import {
   type CodeLanguage,
@@ -43,8 +45,9 @@ export function CodeDiff({
   height = '20rem',
   className,
 }: CodeDiffProps) {
+  const { layout, wrap, whitespace } = usePreferencesStore((s) => s.diffDisplay)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const mergeRef = useRef<MergeView | null>(null)
+  const mergeRef = useRef<MergeView | EditorView | null>(null)
   // The editors are built once per revision; they call whichever handler is current, so a
   // parent that passes a new function each render does not rebuild them.
   const lineClickRef = useRef(onLineClick)
@@ -79,36 +82,108 @@ export function CodeDiff({
           ]
         : []),
       baseHighlightExtensions,
+      // The diff sits in a well: the editor and its gutter let the well show through. The
+      // added and removed lines take the diff tints, their gutter marks and changed words
+      // the status inks, in place of the editor library's own colors. Each selector has the
+      // specificity of the library's rule it replaces, and this theme comes after it.
+      Prec.highest(
+        EditorView.theme({
+          '&, .cm-gutters': { backgroundColor: 'transparent' },
+          '&.cm-merge-b .cm-changedLine': {
+            backgroundColor: 'var(--diff-add)',
+          },
+          '&.cm-merge-a .cm-changedLine, .cm-deletedChunk': {
+            backgroundColor: 'var(--diff-del)',
+          },
+          '&.cm-merge-b .cm-changedLineGutter': { background: 'var(--ok)' },
+          '&.cm-merge-a .cm-changedLineGutter, .cm-deletedLineGutter': {
+            background: 'var(--bad)',
+          },
+          '&.cm-merge-b .cm-changedText': {
+            background:
+              'linear-gradient(var(--ok), var(--ok)) bottom / 100% 2px no-repeat',
+          },
+          '&.cm-merge-a .cm-changedText, .cm-deletedChunk .cm-deletedText': {
+            background:
+              'linear-gradient(var(--bad), var(--bad)) bottom / 100% 2px no-repeat',
+          },
+        }),
+      ),
       languageExtension(language),
       EditorState.readOnly.of(true),
       EditorView.editable.of(false),
-      EditorView.lineWrapping,
+      ...(wrap ? [EditorView.lineWrapping] : []),
       EditorView.contentAttributes.of({ 'aria-label': label }),
     ]
-    mergeRef.current = new MergeView({
-      a: { doc: original, extensions: readOnly(originalLabel, 'original') },
-      b: { doc: modified, extensions: readOnly(modifiedLabel, 'modified') },
-      parent: hostRef.current,
-      collapseUnchanged: { margin: 3, minSize: 4 },
-      highlightChanges: true,
-      gutter: true,
-    })
+    const diffConfig = whitespace
+      ? {
+          override: (a: string, b: string) =>
+            diff(a, b, { scanLimit: 500 }).filter(
+              (change) =>
+                a.slice(change.fromA, change.toA).replace(/[ \t]/g, '') !==
+                b.slice(change.fromB, change.toB).replace(/[ \t]/g, ''),
+            ),
+        }
+      : undefined
+    mergeRef.current =
+      layout === 'unified'
+        ? new EditorView({
+            doc: modified,
+            extensions: [
+              ...readOnly(modifiedLabel, 'modified'),
+              unifiedMergeView({
+                original,
+                diffConfig,
+                mergeControls: false,
+                collapseUnchanged: { margin: 3, minSize: 4 },
+              }),
+            ],
+            parent: hostRef.current,
+          })
+        : new MergeView({
+            a: {
+              doc: original,
+              extensions: readOnly(originalLabel, 'original'),
+            },
+            b: {
+              doc: modified,
+              extensions: readOnly(modifiedLabel, 'modified'),
+            },
+            parent: hostRef.current,
+            collapseUnchanged: { margin: 3, minSize: 4 },
+            diffConfig,
+            highlightChanges: true,
+            gutter: true,
+          })
     return () => {
       mergeRef.current?.destroy()
       mergeRef.current = null
     }
     // Rebuild the merge view when the revisions or language change.
-  }, [original, modified, language, originalLabel, modifiedLabel, clickable])
+  }, [
+    original,
+    modified,
+    language,
+    originalLabel,
+    modifiedLabel,
+    clickable,
+    layout,
+    wrap,
+    whitespace,
+  ])
 
   return (
-    <div
-      data-slot="code-diff"
-      ref={hostRef}
-      style={{ maxHeight: height }}
-      className={cn(
-        'overflow-auto rounded-md border border-border-strong bg-surface text-[0.8125rem]',
-        className,
-      )}
-    />
+    <div className="flex min-w-0 flex-col gap-2">
+      <DiffControls />
+      <div
+        data-slot="code-diff"
+        ref={hostRef}
+        style={{ maxHeight: height }}
+        className={cn(
+          'overflow-auto rounded-ctl bg-[var(--well)] text-[0.8125rem] shadow-[var(--shadow-well)]',
+          className,
+        )}
+      />
+    </div>
   )
 }

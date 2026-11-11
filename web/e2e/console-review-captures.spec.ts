@@ -97,10 +97,13 @@ async function signIn(page: Page, base: string) {
 const heading = (page: Page, name: string | RegExp) =>
   page.getByRole('heading', { name, level: 1 }).first()
 
-/** At 390 px the sidebar is a drawer behind "Open navigation". */
+/** At 390 px the sidebar is a drawer behind the phone bar's More. */
 async function openNavigation(c: Ctx) {
   if (c.size === 'M') {
-    await c.page.getByRole('button', { name: 'Open navigation' }).click()
+    await c.page
+      .locator('[data-slot="phone-navigation"]')
+      .getByRole('button', { name: 'More', exact: true })
+      .click()
     return c.page.locator('[data-slot="navigation-drawer"]')
   }
   return c.page.locator('[data-slot="sidebar"]')
@@ -144,7 +147,10 @@ const SCREENS: Screen[] = [
     engines: ['fresh'],
     run: async (c) => {
       await c.go('fresh', '/')
-      await c.page.locator('#work-start-tools').waitFor({ timeout: 30_000 })
+      await c.page
+        .getByTestId('work-start')
+        .getByTestId('tool-claude')
+        .waitFor({ timeout: 30_000 })
       await c.shot()
     },
   },
@@ -234,15 +240,8 @@ const SCREENS: Screen[] = [
     run: async (c) => {
       await c.go('estate', '/sessions')
       const nav = await openNavigation(c)
-      const more = nav.getByRole('button', { name: 'More', exact: true })
-      // A click before the shell finishes drawing can be lost; click until the section is open.
-      await expect(async () => {
-        if ((await more.getAttribute('aria-expanded')) !== 'true')
-          await more.click()
-        await expect(more).toHaveAttribute('aria-expanded', 'true', {
-          timeout: 2_000,
-        })
-      }).toPass({ timeout: 30_000 })
+      // Every place is listed, the administrative ones too: there is no More to open.
+      await expect(nav.locator('a[data-place="operations"]')).toBeVisible()
       await c.shot()
     },
   },

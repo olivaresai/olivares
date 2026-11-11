@@ -29,6 +29,11 @@ import { networkErrorText } from '@/lib/api/network-error-text'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { useModuleOn } from '@/stores/modules'
+import {
+  EditionNote,
+  editionRefusal,
+  type EditionNoteProps,
+} from '@/components/ui/edition-note'
 
 // The enable action lives with the Modules screen; it loads only when the line offers it.
 const TurnOnModule = lazy(() =>
@@ -80,6 +85,15 @@ export function ModuleEnableAction({ module }: { module?: string }) {
       <TurnOnModule module={module} />
     </Suspense>
   )
+}
+
+/** The edition line where a panel mounts it. Whoever can add a license reads its ways on;
+ * anyone else is asked to ask an administrator. The gate is the license tab's own. */
+export function EditionRefusalNote(
+  props: Omit<EditionNoteProps, 'canAddLicense'>,
+) {
+  const { isSuperadmin } = useAuth()
+  return <EditionNote {...props} canAddLicense={isSuperadmin} />
 }
 
 /** Mounts `children` only while `module` runs here: a panel that reads another module's
@@ -134,6 +148,10 @@ export function QueryErrorState({
         onElevated={retry ? () => retry() : undefined}
       />
     )
+  // The panel's module is wider than what an answer refuses: it never names the capability.
+  const refusal = editionRefusal(error)
+  if (refusal)
+    return <EditionRefusalNote refusal={refusal} className={className} />
   if (
     error instanceof ApiError &&
     error.isForbidden &&

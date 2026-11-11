@@ -59,9 +59,9 @@ description: >-
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
-| 已配置的资源 | `/estate` | 您已配置的内容，以及各部分（包括工作项）之间的依赖关系。 | `sessions:run:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 已配置的资源 | `/estate` | 您已配置的内容，以及各部分（包括工作项）之间的依赖关系。 | `tenant:admin` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 已发现的资源 | `/inventory` | 连接器观察到的智能体、MCP 服务器和模型，以及各自最后一次出现的时间。 | `inventory:catalog:read` | [reference/modules/i-inventory](/zh/reference/modules/i-inventory/) |
-| 工作区 | `/workspace` | 限定在一个工作区内的 Agent、会话、资源和活动 | `tenant:read` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
+| 工作区 | `/workspace` | 限定在一个工作区内的 Agent、会话、资源和活动 | `sessions:workspace:read` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
 
 ### AI
 
@@ -77,7 +77,6 @@ description: >-
 | 提供商配置文件 | `/provider-profiles` | 登记并管理会话启动所依据的提供商主目录，并按需读取其配置 | `sessions:profile:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 提供商 | `/providers` | 注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销 | `sessions:provider:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 速率限制 | `/rate-limits` | Anthropic 速率限制清单（只读） | `models:ratelimits:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
-| 覆盖范围 | `/reach` | 查看每个工具可以访问哪些目标，以及哪些正在等待批准。 | `accessmap:graph:read` | [reference/modules/iii-access-map](/zh/reference/modules/iii-access-map/) |
 | 沙箱 | `/sandbox` | 隔离的 Agent 测试与重放 | `sandbox:run:read` | [reference/modules/xvii-sandbox](/zh/reference/modules/xvii-sandbox/) |
 | 会话 | `/sessions` | 启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话 | `sessions:live:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 语音 | `/voice` | 语音和实时会话 | `voice:session:read` | [reference/modules/xvi-voice](/zh/reference/modules/xvi-voice/) |
@@ -118,13 +117,12 @@ description: >-
 | 访问图 | `/access-map` | 每个 Agent 读取和写入的内容（R/RW） | `accessmap:graph:read` | [reference/modules/iii-access-map](/zh/reference/modules/iii-access-map/) |
 | 策略导出 | `/agentcore-export` | 规划、审阅并应用将本租户治理规则投射为 AWS AgentCore Cedar 策略；规划不写入任何内容 | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 托管策略 | `/claude-policy` | 托管策略、hook、MCP、沙箱和策略即代码 | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/zh/how-to/connectors/claude-code-hooks-pep/) |
-| 身份与访问 | `/identity` | SSO、SCIM 以及智能体使用的身份 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
+| 身份与访问 | `/identity` | SSO、SCIM 以及智能体使用的身份 | `user:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 推理代理 | `/inference-proxy` | 代理门禁、出站 DLP 规则和设备批准 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/zh/reference/modules/inferenceproxy/) |
-| 紧急开关 | `/killswitch` | 紧急停止、双人控制恢复和 guardian 遏制 | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/zh/how-to/cookbook/kill-switch-drill/) |
+| 紧急开关 | `/killswitch` | 紧急停止、双人控制恢复和 guardian 遏制 | `governance:killswitch:admin` | [how-to/cookbook/kill-switch-drill](/zh/how-to/cookbook/kill-switch-drill/) |
 | 权限 | `/permissions` | 身份、角色和批准 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 例行策略 | `/routine-policies` | Claude Code 例行任务的周期下限、并发上限、批准要求和 cron allowlist。 | `governance:routine:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 安全 | `/security` | 护栏、取证和异常 | `security:finding:read` | [reference/modules/ix-security](/zh/reference/modules/ix-security/) |
-| 保险库 | `/vault` | 您的密码、笔记和验证码 | `tenant:read` | [reference/console](/zh/reference/console/) |
 
 ### 交付
 
@@ -139,14 +137,15 @@ description: >-
 | 采用情况 | `/adoption` | 生产力、接受率和模型组合 | `adoption:metrics:read` | [reference/modules/claudeadoption](/zh/reference/modules/claudeadoption/) |
 | 供应链 | `/attestation` | 发布证明——SLSA、SBOM、VEX 和 Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/zh/how-to/verify-a-release/) |
 | 审计账本 | `/audit` | 可检测篡改的证据账本 | `audit:read` | [reference/modules/ix-security](/zh/reference/modules/ix-security/) |
-| 仪表板 | `/dashboards` | 管理层 KPI 和报告 | 任何已登录用户 | [reference/modules/xxi-executive-dashboards](/zh/reference/modules/xxi-executive-dashboards/) |
+| 仪表板 | `/dashboards` | 管理层 KPI 和报告 | `tenant:admin` | [reference/modules/xxi-executive-dashboards](/zh/reference/modules/xxi-executive-dashboards/) |
 | 评估 | `/evals` | 质量、评估和回归 | `evals:run:read` | [reference/modules/xii-evals](/zh/reference/modules/xii-evals/) |
 | 健康与 SLA | `/health` | Agent 和 MCP 的运行时间及 SLA | `health:status:read` | [reference/modules/xxii-health](/zh/reference/modules/xxii-health/) |
 | 可观测性 | `/observability` | 按标准查看摄取健康状况和追踪下钻 | `health:status:read` | [reference/modules/observability](/zh/reference/modules/observability/) |
-| 运维 | `/operations` | 主机、它的磁盘、正在运行的会话及其用量，按 24 小时、7 天或 30 天查看。 | `sessions:run:read` | [reference/console](/zh/reference/console/) |
+| 运维 | `/operations` | 主机、它的磁盘、正在运行的会话及其用量，按 24 小时、7 天或 30 天查看。 | `health:status:read` | [reference/console](/zh/reference/console/) |
+| 覆盖范围 | `/reach` | 查看每个工具可以访问哪些目标，以及哪些正在等待批准。 | `accessmap:graph:read` | [reference/modules/iii-access-map](/zh/reference/modules/iii-access-map/) |
 | 保留策略 | `/retention` | 每类记录的保留期限、执行保留的清理以及已封存的证书 | `compliance:retention:read` | [reference/modules/xiii-compliance](/zh/reference/modules/xiii-compliance/) |
 | 预算 | `/stored-budgets` | 针对每个已保存限额的消耗情况。预留容量计入限额。 | `finops:budget:read` | [reference/modules/xi-finops](/zh/reference/modules/xi-finops/) |
-| 用量 | `/usage` | 每个账户的官方 5 小时和每周限额（最接近限额的在前），以及今天的令牌和费用。 | `sessions:run:read` | [reference/console](/zh/reference/console/) |
+| 用量 | `/usage` | 每个账户的官方 5 小时和每周限额（最接近限额的在前），以及今天的令牌和费用。 | `sessions:account:read` | [reference/console](/zh/reference/console/) |
 
 ### 系统与设置
 
@@ -159,6 +158,7 @@ description: >-
 | 日志 | `/logs` | 实时引擎日志流，可按级别和模块过滤，并支持搜索和暂停。 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 | 设置向导 | `/onboarding` | 分步部署配置 | `system:admin` | [start/quickstart](/zh/start/quickstart/) |
 | 更新 | `/updates` | 此引擎正在运行的版本、其通道中最新的已签名版本，以及安装它的一个操作 | `system:admin` | [how-to/upgrade-and-rollback](/zh/how-to/upgrade-and-rollback/) |
+| 保险库 | `/vault` | 您的密码、笔记和验证码 | `tenant:read` | [reference/console](/zh/reference/console/) |
 
 ### 登录、设置与账户
 

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { BoxedListRow } from '@/components/ui/boxed-list'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -43,7 +44,7 @@ export function SettingsRow({
   resetLabel?: string
 }) {
   return (
-    <div className="grid grid-cols-1 items-center gap-3 border-t border-line py-3.5 sm:grid-cols-[minmax(0,1fr)_auto]">
+    <BoxedListRow className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2 text-body font-medium text-text">
           <span>{name}</span>
@@ -54,6 +55,6 @@ export function SettingsRow({
         ) : null}
       </div>
       <div className="justify-self-start sm:justify-self-end">{control}</div>
-    </div>
+    </BoxedListRow>
   )
 }

@@ -84,6 +84,7 @@
     "notReady": "{{tool}} はまだ開始できません。",
     "folder": "フォルダー",
     "folderHint": "このサーバー上のフォルダーです。",
+    "folderHintGiven": "このサーバーに登録済みのフォルダーのパスです。新しいフォルダーは管理者が登録します。",
     "folderChoose": "フォルダーを選択",
     "folderNew": "このセッション用の新しいフォルダー",
     "folderTyped": "別のフォルダー…",
@@ -111,6 +112,7 @@
     "credentialsManage": "管理されたクレデンシャルを管理",
     "listUnavailable": "エンジンがシークレット一覧に応答しませんでした。今は何も選択できません。",
     "openTools": "AI ツールを開く",
+    "askAdmin": "管理者に準備を依頼してください。",
     "model": "モデル",
     "providerDefault": "既定 ({{model}})",
     "nativeDefault": "{{tool}} の既定",
@@ -123,14 +125,21 @@
     "profileNeedsKey": "キーが必要",
     "foldersUnreadable": "登録済みのフォルダーを読み込めませんでした。このサーバー上のフォルダーのパスを入力してください。",
     "folderPermission": "{{name}}で開始します（このフォルダーの既定）。",
-    "autoAsks": "{{tool}}には自動モードがないため、操作ごとに確認します。"
+    "autoAsks": "{{tool}}には自動モードがないため、操作ごとに確認します。",
+    "worktreeCheckout": "現在のチェックアウト",
+    "worktreeNew": "新しいワークツリー",
+    "worktreeFrom": "開始位置",
+    "worktreeFromHint": "ブランチまたはコミット（任意）",
+    "worktreeNewHint": "セッションは別フォルダー内の専用ブランチで作業します。現在のチェックアウトはそのままです。",
+    "worktreeLegend": "作業コピー"
   },
   "composer": {
     "toolPill": "ツールとアカウント: {{value}}",
     "modelPill": "モデル: {{value}}",
     "effortPill": "推論レベル: {{value}}",
     "folderPill": "フォルダー: {{value}}",
-    "moreOptions": "その他のオプション"
+    "moreOptions": "その他のオプション",
+    "worktreePill": "作業コピー: {{value}}"
   },
   "lists": {
     "foldersTruncated": "登録済みフォルダー：{{count}} 件読み込み済み。ほかにもあります。",

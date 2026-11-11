@@ -57,7 +57,10 @@ type outputRing struct {
 	nextSeq  int64 // next seq to assign
 	limitSeq int64 // exclusive generation bound; never reuse another's range
 	closed   bool
-	notify   chan struct{} // closed+replaced on every append/close to wake readers
+	// One replaceable live preview, never sequenced or recorded.
+	delta        *attachFrame
+	deltaVersion uint64
+	notify       chan struct{} // closed+replaced on every append/close to wake readers
 }
 
 // newOutputRing builds a ring with the given (count, bytes) bounds.
@@ -106,6 +109,7 @@ func (r *outputRing) append(stream string, data []byte, at time.Time) int64 {
 		r.wakeLocked()
 		return 0
 	}
+	r.delta = nil
 	seq := r.nextSeq
 	r.nextSeq++
 	f := seqFrame{Seq: seq, Stream: stream, Data: data, At: at}
@@ -138,6 +142,7 @@ func (r *outputRing) close() {
 		return
 	}
 	r.closed = true
+	r.delta = nil
 	r.wakeLocked()
 }
 
@@ -157,12 +162,14 @@ func (r *outputRing) wakeLocked() {
 
 // ringRead is the result of a cursor read.
 type ringRead struct {
-	frames  []seqFrame // a COPY (safe to use after the lock is released)
-	next    int64      // the cursor to use on the next read
-	gap     bool       // true if frames below the cursor were evicted (honest loss)
-	dropped int64      // how many frames were evicted past the cursor (when gap)
-	closed  bool       // the stream has ended (no more frames will ever arrive)
-	earlier bool       // buffered frames remain below the frames read (a reader may page back to them)
+	delta        *attachFrame
+	deltaVersion uint64
+	frames       []seqFrame // a COPY (safe to use after the lock is released)
+	next         int64      // the cursor to use on the next read
+	gap          bool       // true if frames below the cursor were evicted (honest loss)
+	dropped      int64      // how many frames were evicted past the cursor (when gap)
+	closed       bool       // the stream has ended (no more frames will ever arrive)
+	earlier      bool       // buffered frames remain below the frames read (a reader may page back to them)
 }
 
 // readFrom returns the buffered frames with Seq >= cursor (a copy), the next
@@ -171,7 +178,7 @@ type ringRead struct {
 func (r *outputRing) readFrom(cursor int64) ringRead {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	res := ringRead{next: cursor, closed: r.closed}
+	res := ringRead{next: cursor, closed: r.closed, delta: r.delta, deltaVersion: r.deltaVersion}
 	if len(r.frames) == 0 {
 		res.next = r.nextSeq
 		return res
@@ -213,4 +220,17 @@ func (r *outputRing) tailCursor(n int64) int64 {
 		return 0
 	}
 	return r.nextSeq - n
+}
+
+// publishDelta replaces the live snapshot without consuming replay capacity.
+// A slow attach may miss snapshots; the final assistant frame is authoritative.
+func (r *outputRing) publishDelta(line []byte, at time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return
+	}
+	r.deltaVersion++
+	r.delta = &attachFrame{Stream: streamStdout, Line: string(line), At: attachFrameTime(at)}
+	r.wakeLocked()
 }

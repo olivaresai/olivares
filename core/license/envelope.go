@@ -160,6 +160,54 @@ func (v Verified) Profile() string {
 	return v.Claims.NormalizedProfile()
 }
 
+// The editions a licence can entitle, lowest first. Community is what no live licence entitles.
+const (
+	EditionCommunity  = "community"
+	EditionEngineer   = "engineer"
+	EditionBusiness   = "business"
+	EditionEnterprise = "enterprise"
+)
+
+// editionRank orders the editions: each holds what the ones below it hold.
+var editionRank = map[string]int{EditionCommunity: 1, EditionEngineer: 2, EditionBusiness: 3, EditionEnterprise: 4}
+
+// EditionCovers reports whether edition have holds what edition want holds. An unknown have
+// holds what Community holds; an unknown want is held by none.
+func EditionCovers(have, want string) bool {
+	return max(editionRank[have], editionRank[EditionCommunity]) >= editionRank[want] && editionRank[want] > 0
+}
+
+// baseEditions maps the signed base product, the canon offer id, to the edition it entitles.
+var baseEditions = map[string]string{
+	"self_hosted.engineer":   EditionEngineer,
+	"self_hosted.business":   EditionBusiness,
+	"self_hosted.enterprise": EditionEnterprise,
+}
+
+// Edition is the edition this licence entitles at status, the caller's own reading of it (with a
+// revocation list when it has one), so the edition never disagrees with the status beside it.
+// A licence that is not live entitles Community. A live v3 credential entitles its base grant's
+// product; an unknown product entitles nothing and answers "" (inert, never rejected). A live flat
+// licence entitles Business, Enterprise when its plan says so.
+func (v Verified) Edition(status Status) string {
+	switch status {
+	case StatusValid, StatusGrace, StatusPerpetual:
+	default:
+		return EditionCommunity
+	}
+	switch v.Container {
+	case ContainerCredentialV3:
+		base, _ := v.Credential.BaseGrant()
+		return baseEditions[base.ProductID]
+	case ContainerFlat:
+		if strings.EqualFold(strings.TrimSpace(v.Claims.Plan), EditionEnterprise) {
+			return EditionEnterprise
+		}
+		return EditionBusiness
+	}
+	return EditionCommunity
+}
+
 // Status reports the license status at `now` for either container. See Credential.Status for the
 // v3 definition and why it is the base grant's.
 func (v Verified) Status(now time.Time) Status {

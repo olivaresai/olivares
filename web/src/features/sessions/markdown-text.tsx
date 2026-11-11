@@ -8,6 +8,8 @@
 // without the opener.
 import { Fragment, memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Play } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
 import {
   parseMarkdown,
@@ -16,6 +18,7 @@ import {
   type HrefResolver,
 } from './markdown'
 import { CodeOrPath } from './path-chip'
+import { useRunInTerminal } from './run-in-terminal'
 
 interface MarkdownPresentation {
   renderLink?: (href: string, children: ReactNode) => ReactNode
@@ -141,11 +144,12 @@ function Blocks({
                 <pre
                   tabIndex={0}
                   data-slot="reply-code"
-                  className="m-0 overflow-x-auto rounded-ctl bg-muted p-3 pe-10 font-mono text-mono-s text-text focus-visible:ring-2 focus-visible:ring-focus"
+                  className="m-0 overflow-x-auto rounded-ctl bg-muted p-3 pe-20 font-mono text-mono-s text-text focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   <code>{block.text}</code>
                 </pre>
                 <CodeCopy text={block.text} />
+                {isShell(block.lang) ? <CodeRun text={block.text} /> : null}
               </div>
             )
           case 'quote':
@@ -229,6 +233,30 @@ function CodeCopy({ text }: { text: string }) {
       failedLabel={t('ui.copy.failed')}
       className="absolute end-1 top-1 bg-muted"
     />
+  )
+}
+
+const SHELL_LANGUAGES = new Set(['sh', 'bash', 'shell', 'shellscript', 'zsh'])
+const isShell = (lang: string | undefined) =>
+  lang !== undefined && SHELL_LANGUAGES.has(lang)
+
+/** A shell block runs in the session's terminal when it has one: the person's click, in the
+ * folder the session works in, under the same limits as the session. */
+function CodeRun({ text }: { text: string }) {
+  const { t } = useTranslation('sessions')
+  const terminal = useRunInTerminal()
+  if (!terminal) return null
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="absolute end-9 top-1 size-7 bg-muted"
+      aria-label={t('terminal.runInTerminal')}
+      title={t('terminal.runInTerminal')}
+      onClick={() => terminal.run(text)}
+    >
+      <Play aria-hidden />
+    </Button>
   )
 }
 

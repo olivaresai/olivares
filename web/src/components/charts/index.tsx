@@ -45,7 +45,7 @@ type TooltipContent = ComponentProps<typeof Tooltip>['content']
 type Formatter = (value: number) => string
 const identity: Formatter = (v) => String(v)
 
-const AXIS_FONT = 11
+const AXIS_FONT = 12
 
 /** A series in a multi-line / multi-area trend chart. */
 export interface SeriesSpec {
@@ -143,7 +143,7 @@ function makeTooltip(
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span
                   aria-hidden
-                  className="size-2 rounded-[2px]"
+                  className="size-2 rounded-full"
                   style={{ backgroundColor: entry.color ?? theme.mutedText }}
                 />
                 {entry.name}
@@ -240,7 +240,7 @@ export function TrendChart({
           tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
           tickFormatter={xTickFormatter}
           tickLine={false}
-          axisLine={{ stroke: theme.grid }}
+          axisLine={{ stroke: theme.border }}
           minTickGap={24}
         />
         <YAxis
@@ -459,7 +459,7 @@ export function CategoryBarChart({
                 tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
                 tickFormatter={categoryFormatter}
                 tickLine={false}
-                axisLine={{ stroke: theme.grid }}
+                axisLine={{ stroke: theme.border }}
                 minTickGap={8}
               />
               <YAxis
@@ -598,7 +598,7 @@ export function ChartLegend({
           <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
             <span
               aria-hidden
-              className="size-2 shrink-0 rounded-[2px]"
+              className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: it.color }}
             />
             <span className="truncate">{it.label}</span>
@@ -835,7 +835,7 @@ export function StatusBar({
             ))}
       </div>
       {showLegend ? (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1">
+        <ul className="flex flex-wrap gap-x-4.5 gap-y-1">
           {segments.map((s) => (
             <li
               key={s.key}
@@ -843,7 +843,7 @@ export function StatusBar({
             >
               <span
                 aria-hidden
-                className="size-2 rounded-[2px]"
+                className="size-2 rounded-full"
                 style={{ backgroundColor: s.color }}
               />
               <span>{s.label}</span>

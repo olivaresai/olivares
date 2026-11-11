@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE APP FRAME (0.5): the left navigation, then the sheet.
+// THE APP FRAME: the left navigation on the darker frame, then one raised sheet.
 //
-//   frame ─┬─ sidebar (228 px, folds to 64 px; from 761 px only, a drawer below)
-//          └─ sheet (the canvas; it does not float, so it has no shadow)
-//               ├─ top bar (56 px: title, search, notifications, account)
+//   frame ─┬─ sidebar (248 px, folds to its 60 px rail; from 761 px only, a drawer below)
+//          └─ sheet (the canvas, 8 px from the window, raised; its edge an inset hairline)
+//               ├─ header bar (52 px: title, the place's pages, search, notifications)
 //               ├─ body: main [+ side panel 380 px; 340 px ≤ 1360 px; overlay < 1100 px]
-//               └─ status bar (24 px: engine, running, usage, stops … Stop all, version)
+//               └─ status line (28 px: engine, sessions, usage, stops … Stop all, the edition)
 //
 // DOM order is reading and Tab order: skip link, navigation, top bar, work, status bar.
 import type { ReactNode } from 'react'
@@ -35,7 +35,7 @@ export function AppFrame({
   return (
     <div
       data-slot="app-frame"
-      className="flex h-svh overflow-hidden bg-canvas text-text print:block print:h-auto print:overflow-visible"
+      className="flex h-svh overflow-hidden bg-frame text-text print:block print:h-auto print:overflow-visible"
     >
       {/* WCAG 2.4.1 Bypass Blocks: the first stop on every page skips the navigation and
           the top bar. */}
@@ -51,7 +51,7 @@ export function AppFrame({
       {sidebar}
       <div
         data-slot="sheet"
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-canvas print:overflow-visible"
+        className="my-2 mr-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-panel border-0 bg-canvas shadow-[var(--shadow-raised),inset_0_0_0_1px_var(--line)] max-[760px]:m-0 max-[760px]:rounded-none max-[760px]:pb-14 max-[760px]:shadow-none print:overflow-visible"
       >
         {topbar}
         {/* The body is a ROW: the work, then the panel beside it. Nothing sits below

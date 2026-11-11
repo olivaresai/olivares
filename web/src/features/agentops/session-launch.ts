@@ -116,6 +116,12 @@ export interface QuickLaunch {
   /** The profile the person chose when the tool has several: it is the session's, and the
    * engine's rule for the default login is not asked. Absent means that rule. */
   profileRef?: string
+  /** A git worktree and branch of the session's own, made from the folder. Absent works in
+   * the folder's current checkout. */
+  worktree?: boolean
+  /** With `worktree`: the commit id or local branch it starts at. Absent starts at the
+   * folder's current commit. */
+  worktreeFrom?: string
 }
 
 /** One launch from either form, with the first message ('' sends none). The quick form
@@ -240,6 +246,12 @@ async function quickRun(
     ...(template_id ? { template_id } : {}),
     ...(quick.secretEnv?.length ? { secret_env: quick.secretEnv } : {}),
     ...(quick.credentials?.length ? { credentials: quick.credentials } : {}),
+    ...(quick.worktree
+      ? {
+          worktree: true,
+          ...(quick.worktreeFrom ? { worktree_from: quick.worktreeFrom } : {}),
+        }
+      : {}),
   }
 }
 
@@ -413,7 +425,8 @@ async function sendWhenApproved(
         // A passing network or server error is read again, for a while; a run this
         // sign-in can no longer read never runs for it.
         const forbidden =
-          err instanceof ApiError && (err.status === 403 || err.status === 404)
+          err instanceof ApiError &&
+          (err.isForbiddenOrEdition || err.isNotFound)
         if (forbidden || ++failures >= APPROVAL_READ_FAILURES)
           return settle(reason(err))
         continue

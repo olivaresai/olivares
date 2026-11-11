@@ -37,6 +37,7 @@ import { LiveConsole } from '@/features/agentops/live-console'
 import { EventsPanel, RunInfo } from '@/features/agentops/run-detail'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import { sessionNameLadder } from '@/features/home/work-line'
+import { useViewAccess } from '@/features/navigation/authorization'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { LiveDot, RelTimeLabel, humanDurationSeconds } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
@@ -171,6 +172,9 @@ function CardBody({
   // The one ladder, same call the rail makes — so the sheet and the row that opened it
   // can never tell the same session two different names.
   const naming = sessionNaming(session, t('untitled'))
+  // The access map is offered only where its page opens: its read is the administrator's.
+  const { navigable } = useViewAccess()
+  const accessMap = FEATURE_VIEWS.find((view) => view.id === 'accessMap')
 
   if (loading) {
     return (
@@ -371,9 +375,7 @@ function CardBody({
           Feature routes are generated from the registry, so their paths are not in the
           static route union — the shell uses the same `as never` escape hatch. */}
       <div className="flex flex-wrap gap-2">
-        {FEATURE_VIEWS.some(
-          (view) => view.id === 'accessMap' && !view.hideInNav,
-        ) && (
+        {accessMap && !accessMap.hideInNav && navigable(accessMap) && (
           <Button variant="secondary" size="sm" asChild>
             <Link to={'/access-map' as never}>
               <Network className="size-3.5" />

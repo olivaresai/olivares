@@ -71,6 +71,9 @@ func TestSessionClaudePresetAskQueuesBeforeCommand(t *testing.T) {
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
+	if !pending.SessionScopeAllowed {
+		t.Fatal("preset-only review does not offer a session allowance")
+	}
 	if pending.SessionRef != p.SessionIdentity || pending.RequestedBy != "session:"+p.SessionIdentity || pending.RequiredApprovals != 1 {
 		t.Fatal("preset ask lacks canonical requester or one-reviewer default")
 	}
@@ -80,6 +83,86 @@ func TestSessionClaudePresetAskQueuesBeforeCommand(t *testing.T) {
 	<-done
 	if !bytes.Contains(rec.Body.Bytes(), []byte(`"permissionDecision":"allow"`)) {
 		t.Fatalf("approved preset ask did not complete: %s", rec.Body.String())
+	}
+}
+
+func TestSessionClaudeAllowanceRequiresExactFileInput(t *testing.T) {
+	h := newHarness(t)
+	tenant := model.TenantID(h.tenantA)
+	human, err := h.authr.Authenticate(context.Background(), h.adminToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newSessionHookCredentials(h.authr, h.st, h.set.sessions, h.set.gov)
+	intent := claimHookTestSession(t, h, human, tenant, "preset-ask")
+	intent.PermissionMode = "default" // Engine-resolved ask, bound at create or resume.
+	token, err := c.mintForPrincipal(human, tenant, intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := h.set.gov.EngineApprovals()
+	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
+	h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: c, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
+
+	path := filepath.Join(t.TempDir(), "approved.txt")
+	for _, tc := range []struct {
+		name, tool string
+		input      map[string]any
+		ask        bool
+	}{
+		{"first write", "Write", map[string]any{"file_path": path, "content": "one"}, true},
+		{"same write", "Write", map[string]any{"content": "one", "file_path": path}, false},
+		{"changed write", "Write", map[string]any{"file_path": path, "content": "two"}, true},
+		{"different tool", "Edit", map[string]any{"file_path": path, "old_string": "two", "new_string": "three"}, true},
+		{"same edit", "Edit", map[string]any{"file_path": path, "old_string": "two", "new_string": "three"}, false},
+		{"changed edit", "Edit", map[string]any{"file_path": path, "old_string": "two", "new_string": "four"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "session_id": intent.ClaimSID, "tool_name": tc.tool, "tool_input": tc.input})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(raw)).WithContext(ctx)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			done := make(chan struct{})
+			go func() { defer close(done); claude.NewHookPEP(d, nil, time.Now).ServeHTTP(rec, req) }()
+			defer func() { cancel(); <-done }()
+			asked := false
+			for {
+				select {
+				case <-done:
+					if asked != tc.ask {
+						t.Fatalf("approval queued = %v, want %v: %s", asked, tc.ask, rec.Body.String())
+					}
+					if !bytes.Contains(rec.Body.Bytes(), []byte(`"permissionDecision":"allow"`)) {
+						t.Fatalf("hook denied: %s", rec.Body.String())
+					}
+					return
+				case <-ctx.Done():
+					t.Fatal("tool approval did not complete")
+				case <-time.After(10 * time.Millisecond):
+					items, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, pending := range items {
+						asked = true
+						if !tc.ask {
+							t.Fatal("identical input asked again")
+						}
+						if !pending.SessionScopeAllowed {
+							t.Fatal("file tool does not offer session scope")
+						}
+						if _, err := service.Decide(ctx, tenant, human, pending.ID, governance.ApprovalDecisionRequest{Decision: "approve", Scope: "session"}); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			}
+		})
 	}
 }
 
@@ -160,6 +243,12 @@ func TestSessionClaudePresetCombinesTenantRestrictions(t *testing.T) {
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
 			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: tc.tenantDecision}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 			assertPresetHook(t, d, service, tenant, human, token, intent.ClaimSID, "PreToolUse", "Write", tc.want)
+			if tc.tenantDecision == "ask" && tc.want == "ask" {
+				items, _, err := service.List(t.Context(), tenant, hookpep.ActionCapability, "approved", "")
+				if err != nil || len(items) != 1 || items[0].SessionScopeAllowed {
+					t.Fatalf("authored review offered a session allowance: %+v %v", items, err)
+				}
+			}
 		})
 	}
 }

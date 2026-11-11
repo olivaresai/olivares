@@ -51,7 +51,7 @@ export function AsyncSection<T>({
     const error = query.error
     const calm =
       error instanceof ApiError &&
-      (error.isForbidden || isModuleNotEnabled(error)) &&
+      (error.isForbiddenOrEdition || isModuleNotEnabled(error)) &&
       !error.isStepUpRequired
     const state = (
       <QueryErrorState error={error} retry={() => void query.refetch()} />

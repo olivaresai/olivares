@@ -156,7 +156,8 @@
     "statuses": {
       "active": "Activo",
       "inactive": "Inactivo",
-      "error": "Error"
+      "error": "Error",
+      "suspended": "Suspendida"
     },
     "roles": {
       "viewer": "Lector",
@@ -172,7 +173,25 @@
     "endSessionsFor": "¿Cerrar las sesiones de {{email}}?",
     "endSessionsBody": "Todas las sesiones activas de {{email}} dejarán de funcionar en esta organización. Sus sesiones en otras organizaciones, sus tokens de API y su cuenta no cambiarán.",
     "sessionsEnded": "Se ha finalizado el acceso a esta organización",
-    "totpResetDone": "Factor TOTP restablecido."
+    "totpResetDone": "Factor TOTP restablecido.",
+    "search": "Buscar personas",
+    "filterLabel": "Filtrar por estado",
+    "filterAll": "Todos los estados",
+    "noMatch": "Nadie coincide",
+    "noMatchHint": "Cambia la búsqueda o el filtro de estado.",
+    "bulkLabel": "Acciones para las personas seleccionadas",
+    "selected": "Seleccionadas: {{n}}",
+    "selectAll": "Seleccionar a todas las personas mostradas",
+    "selectRow": "Seleccionar a {{email}}",
+    "suspend": "Suspender",
+    "reactivate": "Reactivar",
+    "suspendTitle": "Suspender el acceso",
+    "suspendBody": "{{email}} deja de poder iniciar sesión o usar tokens de API en esta organización, desde ahora mismo. Su rol y sus grupos se conservan y puedes reactivarla cuando quieras.",
+    "suspendBodyMany": "{{n}} personas dejan de poder iniciar sesión o usar tokens de API en esta organización, desde ahora mismo. Sus roles y grupos se conservan y puedes reactivarlas cuando quieras.",
+    "suspendFor": "Suspender a {{email}}",
+    "reactivateFor": "Reactivar a {{email}}",
+    "suspendedToast": "Suspendidas: {{n}}",
+    "reactivatedToast": "Reactivadas: {{n}}"
   },
   "superadmins": {
     "title": "Administradores de la instalación",
@@ -313,7 +332,7 @@
       "sessions": "El secreto se elimina del almacén. Una sesión que lo recibe sigue en ejecución, pero no podrá reanudarse, y una plantilla que lo nombre no podrá lanzarse, hasta que lo vuelvas a crear."
     },
     "sessionCaption": "Secretos que una sesión puede recibir como variables de entorno. Los nombres empiezan por env/. Un valor nunca se vuelve a mostrar.",
-    "credentialCaption": "Credenciales administradas que una sesión puede usar mediante los ayudantes del motor (Business). Los nombres empiezan por credential/. Un valor nunca se vuelve a mostrar.",
+    "credentialCaption": "Credenciales administradas que una sesión puede usar mediante los ayudantes del motor (Olivares AI Business). Los nombres empiezan por credential/. Un valor nunca se vuelve a mostrar.",
     "colValue": "Valor",
     "colChanged": "Último cambio",
     "colReference": "Referencia",
@@ -939,7 +958,7 @@
   "activation": {
     "title": "Activación de Business",
     "caption": "Enciende los módulos que incluye tu edición. Los controles con un valor por defecto seguro se activan; los que necesitan un secreto o una revisión de política quedan preparados para que los completes y los promociones.",
-    "unavailable": "La activación está disponible en la edición Business.",
+    "unavailable": "La activación está disponible en la edición Olivares AI Business.",
     "enablePreset": "Activar un preset",
     "addon": "Módulo",
     "state": "Estado",

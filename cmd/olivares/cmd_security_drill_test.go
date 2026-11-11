@@ -16,12 +16,19 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
+// beforeTests, when a build-tagged test file sets it, runs once after every init and
+// before the tests.
+var beforeTests func()
+
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == confine.HelperArg {
 		os.Exit(sessions.RunConfinementHelper(os.Args[2:]))
 	}
 	if os.Getenv("OLIVARES_CLI_TRAMPOLINE") == "1" {
 		os.Exit(runMain())
+	}
+	if beforeTests != nil {
+		beforeTests()
 	}
 	os.Exit(m.Run())
 }

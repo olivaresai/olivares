@@ -370,18 +370,25 @@
       "placeholder": "按 Enter 将消息排队，等本轮结束后发送",
       "placeholderSteer": "按 Enter 排队到本轮之后，按 Ctrl+Enter 立即插入当前轮",
       "discarded": "会话被释放时，以下消息仍在排队：",
-      "copy": "复制"
-    }
+      "copy": "复制",
+      "placeholderQueueKey": "按 {{key}} 排队到本轮之后",
+      "placeholderSteerKey": "按 {{key}} 立即插入当前轮"
+    },
+    "stash": "暂存草稿",
+    "stashRestore": "恢复暂存的草稿",
+    "plan": "计划",
+    "planHint": "先做计划：工具只读取并提出计划，不做任何更改。从下一条消息起生效。"
   },
   "shell": {
     "more": "更多",
     "searchCommands": "搜索和命令",
     "search": "搜索",
+    "searchGo": "搜索或前往…",
     "stopAll": "全部停止",
     "workspaceCount": "工作区：{{count}}",
     "rail": {
       "title": "会话",
-      "all": "全部",
+      "seeAll_other": "查看全部 {{count}} 个会话",
       "groups": {
         "needsYou": "需要你处理",
         "working": "运行中",
@@ -431,13 +438,14 @@
     "killswitch": {
       "estateStopped": "所有智能体已停止",
       "estateBody": "在两个用户账户批准重新启动之前，智能体无法执行操作。",
-      "agentStops": "{{count}} 项智能体停止生效中",
-      "agentStops_other": "{{count}} 项智能体停止生效中",
+      "agentStops": "{{count}} 个智能体已停止",
+      "agentStops_other": "{{count}} 个智能体已停止",
       "none": "没有任何停止。会话和智能体正常运行。"
     },
     "status": {
       "label": "状态",
       "running_other": "{{count}} 个未结束的会话",
+      "needYou_other": "{{count}} 个需要你处理",
       "usage": "{{tool}} 用量",
       "fiveHour": "5 小时",
       "week": "周",
@@ -448,7 +456,6 @@
     },
     "collapse": "收起导航",
     "expand": "展开导航",
-    "openNavigation": "打开导航",
     "closeNavigation": "关闭导航"
   },
   "places": {
@@ -474,6 +481,10 @@
     "securityRedTeam": "红队演练运行与评分",
     "operationsDeploy": "将智能体部署到其他主机",
     "operationsResidency": "数据驻留与租户",
-    "retentionSchedules": "保留策略仅在 Olivares Business 中执行：此版本只保存它们，不清除任何内容。"
+    "retentionSchedules": "保留策略仅在 Olivares AI Business 中执行：此版本只保存它们，不清除任何内容。"
+  },
+  "groups": {
+    "control": "治理",
+    "admin": "管理"
   }
 }

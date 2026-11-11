@@ -53,12 +53,12 @@ vi.mock('@/lib/auth/context', () => ({
 
 /** The toaster is not mounted here, so a toast never reaches the DOM. What matters
  *  is WHICH tone was used: a pending approval announced as a success is the defect. */
-const toastSpy = {
+const toastSpy = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
   info: vi.fn(),
-}
+}))
 vi.mock('@/components/ui/toaster', () => ({ toast: toastSpy }))
 
 vi.mock('./api', async () => {

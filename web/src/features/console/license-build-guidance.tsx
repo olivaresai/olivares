@@ -36,7 +36,7 @@ export function LicenseBuildGuidance({
       </h3>
       <EditionSwitch />
       <a
-        className="w-fit rounded-sm text-accent-text underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="w-fit rounded-sm text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
         href="https://docs.olivares.ai/how-to/install-a-license/#3--community--business-in-place"
       >
         {t('license.switchDocs')}

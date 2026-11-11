@@ -287,6 +287,8 @@ describe('PageHeader — below sm the controls collapse, and nothing leaves', ()
     )
     const toggle = screen.getByTestId('page-actions-toggle')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    // A phone target: 44 px, not the 24 px it was.
+    expect(toggle).toHaveClass('size-11')
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await user.click(toggle)

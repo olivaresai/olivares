@@ -370,18 +370,28 @@
       "placeholder": "Enter ставит сообщение в очередь на после этого хода",
       "placeholderSteer": "Enter — в очередь на после этого хода, Ctrl+Enter — направить сейчас",
       "discarded": "Сессия освобождена, пока в очереди оставались эти сообщения:",
-      "copy": "Копировать"
-    }
+      "copy": "Копировать",
+      "placeholderQueueKey": "{{key}} — в очередь на после этого хода",
+      "placeholderSteerKey": "{{key}} — направить сейчас"
+    },
+    "stash": "Отложить черновик",
+    "stashRestore": "Вернуть отложенный черновик",
+    "plan": "План",
+    "planHint": "Сначала план: инструмент читает и предлагает план, ничего не меняя. Действует со следующего сообщения."
   },
   "shell": {
     "more": "Ещё",
     "searchCommands": "Поиск и команды",
     "search": "Поиск",
+    "searchGo": "Поиск или переход…",
     "stopAll": "Остановить всё",
     "workspaceCount": "Рабочих областей: {{count}}",
     "rail": {
       "title": "Сессии",
-      "all": "Все",
+      "seeAll_one": "Показать {{count}} сессию",
+      "seeAll_few": "Показать все {{count}} сессии",
+      "seeAll_many": "Показать все {{count}} сессий",
+      "seeAll_other": "Показать все {{count}} сессии",
       "groups": {
         "needsYou": "Нужны вы",
         "working": "Выполняется",
@@ -431,11 +441,11 @@
     "killswitch": {
       "estateStopped": "ВСЕ АГЕНТЫ ОСТАНОВЛЕНЫ",
       "estateBody": "Агенты не могут действовать, пока две учетные записи не одобрят повторный запуск.",
-      "agentStops": "активна {{count}} остановка агента",
-      "agentStops_one": "активна {{count}} остановка агента",
-      "agentStops_few": "активны {{count}} остановки агентов",
-      "agentStops_many": "активны {{count}} остановок агентов",
-      "agentStops_other": "активно {{count}} остановок агентов",
+      "agentStops": "Остановлено {{count}} агента",
+      "agentStops_one": "Остановлен {{count}} агент",
+      "agentStops_few": "Остановлено {{count}} агента",
+      "agentStops_many": "Остановлено {{count}} агентов",
+      "agentStops_other": "Остановлено {{count}} агента",
       "none": "Ничего не остановлено. Сессии и агенты работают в обычном режиме."
     },
     "status": {
@@ -444,6 +454,10 @@
       "running_few": "{{count}} сессии открыты",
       "running_many": "{{count}} сессий открыто",
       "running_other": "{{count}} сессии открыто",
+      "needYou_one": "{{count}} ждёт вас",
+      "needYou_few": "{{count}} ждут вас",
+      "needYou_many": "{{count}} ждут вас",
+      "needYou_other": "{{count}} ждут вас",
       "usage": "Использование {{tool}}",
       "fiveHour": "5 ч",
       "week": "нед.",
@@ -454,7 +468,6 @@
     },
     "collapse": "Свернуть навигацию",
     "expand": "Развернуть навигацию",
-    "openNavigation": "Открыть навигацию",
     "closeNavigation": "Закрыть навигацию"
   },
   "places": {
@@ -480,6 +493,10 @@
     "securityRedTeam": "Прогоны red team и оценка",
     "operationsDeploy": "Развёртывание агентов на других хостах",
     "operationsResidency": "Размещение данных и арендаторы",
-    "retentionSchedules": "Расписания применяются только в Olivares Business: эта редакция хранит их и ничего не очищает."
+    "retentionSchedules": "Расписания применяются только в Olivares AI Business: эта редакция хранит их и ничего не очищает."
+  },
+  "groups": {
+    "control": "Управление",
+    "admin": "Администрирование"
   }
 }

@@ -84,6 +84,7 @@
     "notReady": "{{tool}} non può ancora partire.",
     "folder": "Cartella",
     "folderHint": "Una cartella su questo server.",
+    "folderHintGiven": "Il percorso di una cartella già registrata su questo server. Le nuove le registra un amministratore.",
     "folderChoose": "Scegli una cartella",
     "folderNew": "Una nuova cartella per questa sessione",
     "folderTyped": "Un'altra cartella…",
@@ -111,6 +112,7 @@
     "credentialsManage": "Gestisci le credenziali gestite",
     "listUnavailable": "Il motore non ha risposto all'elenco dei secret. Per ora non si può scegliere nulla.",
     "openTools": "Apri gli strumenti AI",
+    "askAdmin": "Chiedi a un amministratore di prepararlo.",
     "model": "Modello",
     "providerDefault": "Predefinito ({{model}})",
     "nativeDefault": "Predefinito di {{tool}}",
@@ -123,14 +125,21 @@
     "profileNeedsKey": "Serve una chiave",
     "foldersUnreadable": "Non è stato possibile leggere le cartelle registrate. Digita il percorso di una cartella su questo server.",
     "folderPermission": "Si avvia come {{name}}, il predefinito di questa cartella.",
-    "autoAsks": "{{tool}} non ha una modalità automatica: chiederà prima di ogni azione."
+    "autoAsks": "{{tool}} non ha una modalità automatica: chiederà prima di ogni azione.",
+    "worktreeCheckout": "Checkout attuale",
+    "worktreeNew": "Nuovo worktree",
+    "worktreeFrom": "Parti da",
+    "worktreeFromHint": "Branch o commit (facoltativo)",
+    "worktreeNewHint": "La sessione lavora su un branch proprio, in una cartella separata. Il checkout resta com'è.",
+    "worktreeLegend": "Copia di lavoro"
   },
   "composer": {
     "toolPill": "Strumento e account: {{value}}",
     "modelPill": "Modello: {{value}}",
     "effortPill": "Sforzo: {{value}}",
     "folderPill": "Cartella: {{value}}",
-    "moreOptions": "Altre opzioni"
+    "moreOptions": "Altre opzioni",
+    "worktreePill": "Copia di lavoro: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Cartelle registrate: {{count}} caricate; ce ne sono altre.",

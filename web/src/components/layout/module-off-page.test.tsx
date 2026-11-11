@@ -101,9 +101,11 @@ describe('the page of a view whose module is off', () => {
         'Push commits, open pull requests and merge through approved Git targets',
       ),
     ).toBeInTheDocument()
+    // The view's icon as a state page draws it: large and quiet; the name a real title.
     expect(
       document.querySelector('[data-slot="module-not-enabled"] svg'),
-    ).not.toBeNull()
+    ).toHaveClass('size-18', 'text-text-3')
+    expect(heading).toHaveClass('text-[1.375rem]/7', 'font-extrabold')
     expect(screen.queryByText(/not enabled on this installation/i)).toBeNull()
     expect(screen.queryByText('Git publication screen')).toBeNull()
   })

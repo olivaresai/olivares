@@ -29,11 +29,24 @@ import (
 // one. The routes that follow act on the starter's own terminal, which any other
 // person, or an ended terminal, answers as not found.
 func (m *Module) terminalRoutes(reg api.RouteRegistrar, folder api.EntityRef) {
+	reg.HandleEntity("GET", "/workspaces/{ref}/terminals", permWsWrite, folder, m.handleListTerminals)
 	reg.HandleEntity("POST", "/workspaces/{ref}/terminals", permWsWrite, folder, m.handleStartTerminal)
 	reg.HandleEntity("GET", "/workspaces/{ref}/terminals/{tid}/stream", permWsWrite, folder, m.handleTerminalStream)
 	reg.HandleEntity("POST", "/workspaces/{ref}/terminals/{tid}/input", permWsWrite, folder, m.handleTerminalInput)
 	reg.HandleEntity("POST", "/workspaces/{ref}/terminals/{tid}/size", permWsWrite, folder, m.handleTerminalSize)
 	reg.HandleEntity("DELETE", "/workspaces/{ref}/terminals/{tid}", permWsWrite, folder, m.handleCloseTerminal)
+}
+
+// handleListTerminals lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them. It needs the same rights as starting one. Another person's terminals are never listed.
+func (m *Module) handleListTerminals(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if !m.terminalAllowed(w, r, mc) {
+		return
+	}
+	items := []map[string]any{}
+	for _, t := range m.terminals.listOf(mc.Tenant, chi.URLParam(r, "ref"), terminalWhoOf(mc)) {
+		items = append(items, map[string]any{"terminal": t.id, "confinement": string(t.confinement.Mode), "started_at": t.started.UTC().Format(time.RFC3339)})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 // handleStartTerminal opens a shell in the folder, confined as a session in that folder is, and answers with the terminal's id. It needs the folder's write, create and erase rights and the step-up this deployment requires; an API token is refused. The optional body gives the window size in rows and columns. Each person may keep a few terminals open.
@@ -53,11 +66,13 @@ func (m *Module) handleStartTerminal(w http.ResponseWriter, r *http.Request, mc 
 		writeRunErr(w, err)
 		return
 	}
+	go m.terminalWatch(t, mc)
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"terminal":          t.id,
-		"confinement":       string(t.confinement.Mode),
-		"idle_seconds":      int(terminalIdleTimeout / time.Second),
-		"reconnect_seconds": int(terminalReconnectWindow / time.Second),
+		"terminal":    t.id,
+		"confinement": string(t.confinement.Mode),
+		// Both fields are kept for clients that read them; 0 says there is no such limit.
+		"idle_seconds":      0,
+		"reconnect_seconds": 0,
 	})
 }
 
@@ -66,19 +81,117 @@ func (m *Module) handleStartTerminal(w http.ResponseWriter, r *http.Request, mc 
 var terminalRights = []auth.TrusteeRight{auth.TrusteeWrite, auth.TrusteeCreate, auth.TrusteeErase}
 
 // terminalAllowed applies the same current folder rights and assurance to every
-// request, including reconnects. A shell cannot keep a grant that was revoked.
+// request, including reconnects. A request that fails them is refused.
 func (m *Module) terminalAllowed(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) bool {
+	allowed, _ := m.terminalAccess(w, r, mc)
+	return allowed
+}
+
+// terminalAccess is terminalAllowed that also says whether a refusal is definite: the
+// person no longer holds the folder rights (accessLost). A step-up that went stale, or a check
+// that could not be answered, refuses the request and is not definite.
+func (m *Module) terminalAccess(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) (allowed, definite bool) {
 	if !auth.StepUpSatisfied(r.Context(), mc.Principal) {
 		writeJSON(w, http.StatusForbidden, api.ErrorBody("step_up_required",
 			"a terminal needs the step-up this deployment requires; complete it and retry"))
-		return false
+		return false, false
+	}
+	if _, err := m.loadWorkspaceRec(r.Context(), mc.Tenant, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
+		return false, accessLost(err)
 	}
 	for _, right := range terminalRights {
-		if !m.workspaceAllowed(w, r, mc, permWsWrite, right) {
-			return false
+		if err := m.authorizeWorkspaceRight(r.Context(), mc, permWsWrite, right, mc.Resource); err != nil {
+			writeRunErr(w, err)
+			return false, accessLost(err)
 		}
 	}
-	return true
+	return true, false
+}
+
+// accessLost reports whether err proves the person no longer has the access: the
+// credential is gone or its tenant admission withdrawn, or the folder or a right was refused
+// (403) or is not there (404). Anything else (an unavailable store or evidence, a deadline)
+// says nothing about the right and never ends a shell.
+func accessLost(err error) bool {
+	var refused *runErr
+	switch {
+	case errors.Is(err, auth.ErrUnauthenticated), errors.Is(err, auth.ErrPrincipalScopeAdmissionRequired), errors.Is(err, auth.ErrCredentialBindingCeiling):
+		return true
+	case errors.As(err, &refused):
+		return refused.status == http.StatusForbidden || refused.status == http.StatusNotFound
+	}
+	return false
+}
+
+// currentFolderAccess asks, for the person held in mc, what a terminal asks at every request: the
+// person is read again from the credential they signed in with, as a detached operation does, the
+// folder is still there and active, and they hold the rights a terminal needs in it. It returns mc
+// with the person as they are now.
+func (m *Module) currentFolderAccess(ctx context.Context, mc api.ModuleContext, folderRef string) (api.ModuleContext, error) {
+	ref, ok := mc.Principal.Ref()
+	if !ok || !m.CommunicationAuthority.bound() {
+		return mc, errSFTPRefused
+	}
+	current, err := m.CommunicationAuthority.resolver.ResolvePrincipalScope(ctx, ref, mc.Tenant)
+	if err != nil {
+		return mc, err
+	}
+	mc.Principal = current
+	rec, err := m.loadWorkspaceRec(ctx, mc.Tenant, folderRef)
+	if err != nil {
+		return mc, err
+	}
+	if rec.String(colWsState) == wsDisabled {
+		return mc, forbiddenErr("the folder is disabled")
+	}
+	for _, right := range terminalRights {
+		if err := m.authorizeWorkspaceRight(ctx, mc, permWsWrite, right, mc.Resource); err != nil {
+			return mc, err
+		}
+	}
+	return mc, nil
+}
+
+// terminalUnverifiedGrace is how long a person's standing may stay unprovable before the shell
+// ends: the same bound as an operated session's owner check (ownerAccessReadGrace). The core
+// answers "evidence unavailable", not "unauthenticated", for a person who was removed from the
+// tenant, so a shell kept past a store outage must still end when standing never comes back.
+var terminalUnverifiedGrace = ownerAccessReadGrace
+
+// terminalWatch ends t when its person loses access while nobody reads from it, until t ends: at
+// once on a proven loss, and when standing could not be proven for terminalUnverifiedGrace. mc holds
+// only what the rights check reads, never the request.
+func (m *Module) terminalWatch(t *terminal, held api.ModuleContext) {
+	mc := api.ModuleContext{Principal: held.Principal, Tenant: held.Tenant, Resource: held.Resource, Admission: held.Admission}
+	tick := time.NewTicker(sftpRecheckInterval)
+	defer tick.Stop()
+	var unverifiedSince time.Time
+	for {
+		select {
+		case <-t.done():
+			return
+		case <-tick.C:
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_, err := m.currentFolderAccess(ctx, mc, t.folderRef)
+		cancel()
+		switch {
+		case err == nil:
+			unverifiedSince = time.Time{}
+		case accessLost(err):
+			t.close("access_revoked")
+			return
+		default:
+			if unverifiedSince.IsZero() {
+				unverifiedSince = time.Now()
+			}
+			if time.Since(unverifiedSince) >= terminalUnverifiedGrace {
+				t.close("access_unverified")
+				return
+			}
+		}
+	}
 }
 
 func terminalWhoOf(mc api.ModuleContext) terminalWho {
@@ -92,8 +205,10 @@ func (m *Module) terminalFrom(w http.ResponseWriter, r *http.Request, mc api.Mod
 		writeRunErr(w, err)
 		return nil, false
 	}
-	if !m.terminalAllowed(w, r, mc) {
-		t.close("access_revoked")
+	if allowed, definite := m.terminalAccess(w, r, mc); !allowed {
+		if definite {
+			t.close("access_revoked")
+		}
 		return nil, false
 	}
 	return t, true
@@ -138,7 +253,7 @@ func (m *Module) handleTerminalSize(w http.ResponseWriter, r *http.Request, mc a
 	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
-// handleCloseTerminal ends the caller's own terminal and everything it started, and records the close in the audit ledger. An idle terminal, or one nobody reconnects to within the reconnect window, ends the same way.
+// handleCloseTerminal ends the caller's own terminal and everything it started, and records the close in the audit ledger. A terminal has no time limit: it runs until it is closed here, its shell exits, its folder is removed, access to it is revoked or the server stops.
 func (m *Module) handleCloseTerminal(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	t, ok := m.terminalFrom(w, r, mc)
 	if !ok {
@@ -155,8 +270,7 @@ func (m *Module) handleCloseTerminal(w http.ResponseWriter, r *http.Request, mc 
 // handleTerminalStream serves the shell's output as server-sent events: "out" frames
 // carry a chunk and the offset it starts at, "exit" ends the stream. ?from=<offset>
 // resumes after a dropped connection; the first frame says where the kept output really
-// starts. The stream counts as an attached browser, so the reconnect window only runs
-// while no stream is open.
+// starts. A terminal keeps running, and keeps its output tail, while no stream is open.
 func (m *Module) handleTerminalStream(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	t, ok := m.terminalFrom(w, r, mc)
 	if !ok {
@@ -167,7 +281,6 @@ func (m *Module) handleTerminalStream(w http.ResponseWriter, r *http.Request, mc
 		writeRunErr(w, badRequest("from must be an output offset"))
 		return
 	}
-	defer t.attach()()
 	rc := http.NewResponseController(w)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -177,8 +290,10 @@ func (m *Module) handleTerminalStream(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	for {
-		if !m.terminalAllowed(w, r, mc) {
-			t.close("access_revoked")
+		if allowed, definite := m.terminalAccess(w, r, mc); !allowed {
+			if definite {
+				t.close("access_revoked")
+			}
 			return
 		}
 		readCtx, cancel := context.WithTimeout(r.Context(), heartbeatInterval)

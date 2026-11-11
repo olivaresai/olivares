@@ -614,7 +614,9 @@ describe('RolesTab', () => {
     })
     wrap(<RolesTab />)
     expect(await screen.findAllByText('auditor')).not.toHaveLength(0)
-    expect(screen.getByText(/editing.*requires business/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/editing.*requires Olivares AI Business\./i),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', {
         name: /new role|new grant|new permission-group|edit role/i,

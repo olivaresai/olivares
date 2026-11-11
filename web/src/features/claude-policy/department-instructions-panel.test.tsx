@@ -14,6 +14,7 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  info: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
@@ -122,6 +123,31 @@ describe('DepartmentInstructionsPanel', () => {
     expect(screen.queryByText(/0 revisions/i)).not.toBeInTheDocument()
   })
 
+  it('names the edition whole when the answer names it', async () => {
+    policyApi.listVersions.mockRejectedValue(
+      new ApiError(501, 'business_required', 'not in this edition', undefined, {
+        edition: 'engineer',
+      }),
+    )
+    const user = userEvent.setup()
+    wrap(<DepartmentInstructionsPanel />)
+
+    await user.click(
+      await screen.findByRole('combobox', { name: /department/i }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Engineering' }))
+
+    // The answer names no capability, and the panel is wider than what it refused.
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'This is part of Olivares AI Engineer.',
+    )
+    expect(screen.queryByText(/Claude policy is part of/)).toBeNull()
+    expect(document.body).not.toHaveTextContent(/business_required|\b501\b/)
+    expect(
+      screen.queryByRole('button', { name: /^publish$/i }),
+    ).not.toBeInTheDocument()
+  })
+
   it('says why a department has nothing to preview', async () => {
     policyApi.dryRun.mockRejectedValue(
       new Error('document is invalid: department eng carries no instructions'),
@@ -143,5 +169,54 @@ describe('DepartmentInstructionsPanel', () => {
         }),
       ),
     )
+  })
+
+  // A refusal that is not an edition's keeps the preview's own title and the engine's
+  // sentence, which can name the policy that refused: never the generic role toast.
+  it('a preview refused by a role keeps its title and the engine’s sentence', async () => {
+    policyApi.dryRun.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'policy p-7 does not allow previews'),
+    )
+    const user = userEvent.setup()
+    wrap(<DepartmentInstructionsPanel />)
+
+    await user.click(
+      await screen.findByRole('combobox', { name: /department/i }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Engineering' }))
+    await user.click(screen.getByRole('button', { name: /preview/i }))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringMatching(/could not preview/i),
+        { description: 'policy p-7 does not allow previews' },
+      ),
+    )
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+  })
+
+  it('a preview refused by edition is the calm edition line, never red', async () => {
+    policyApi.dryRun.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', undefined, {
+        edition: 'engineer',
+        capability: 'claude-policy',
+      }),
+    )
+    const user = userEvent.setup()
+    wrap(<DepartmentInstructionsPanel />)
+
+    await user.click(
+      await screen.findByRole('combobox', { name: /department/i }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Engineering' }))
+    await user.click(screen.getByRole('button', { name: /preview/i }))
+
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent(
+      'Claude policy is part of Olivares AI Engineer.',
+    )
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })

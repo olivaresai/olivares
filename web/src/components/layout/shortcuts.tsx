@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { usePreferencesStore } from '@/stores/preferences'
+import { useSidePanel } from './side-panel'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -77,6 +79,7 @@ interface OpenedSession {
 export function GlobalShortcuts() {
   const { t } = useTranslation(['common', 'nav'])
   const navigate = useNavigate()
+  const panel = useSidePanel()
   // The same permission projection the sidebar, palette and directories use.
   const { listed, navigable } = useViewAccess()
   const boundary = useAuthBoundary()
@@ -125,7 +128,10 @@ export function GlobalShortcuts() {
       next.current = opened
     } else if (opened.to !== next.current.to) next.current = opened
   }, [scope, path, sessionParam])
-  const [helpOpen, setHelpOpen] = useState(false)
+  const helpOpen = useCommandStore((s) => s.helpOpen)
+  const setHelpOpen = useCommandStore((s) => s.setHelpOpen)
+  // The help belongs to this shell: a sign-out does not leave it open for the next person.
+  useEffect(() => () => setHelpOpen(false), [setHelpOpen])
   const { valid, problems } = auditKeybindings(KEYBINDINGS)
   const newSession = useNewSession()
   const commandLabel = (command: string) =>
@@ -161,6 +167,19 @@ export function GlobalShortcuts() {
         sessionHistory:
           !!history.current.previous && !helpOpen && !modalIsOpen(),
       })
+      if (chordCommand === 'shell.sidebar' || chordCommand === 'shell.panel') {
+        if (e.defaultPrevented || e.repeat || e.isComposing || modalIsOpen())
+          return
+        if (chordCommand === 'shell.sidebar') {
+          e.preventDefault()
+          const prefs = usePreferencesStore.getState()
+          prefs.setNavCollapsed(prefs.navCollapsed !== true)
+        } else if (panel?.title) {
+          e.preventDefault()
+          panel.setOpen(!panel.open)
+        }
+        return
+      }
       if (chordCommand === 'palette.open') {
         e.preventDefault()
         useCommandStore.getState().toggle()
@@ -192,7 +211,7 @@ export function GlobalShortcuts() {
       if (chordCommand === 'help.toggle') {
         e.preventDefault()
         navLeader.disarm()
-        setHelpOpen((v) => !v)
+        setHelpOpen(!helpOpen)
         return
       }
       if (chordCommand === 'launcher.focus') {
@@ -270,11 +289,22 @@ export function GlobalShortcuts() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [helpOpen, navigate, visible, newSession, navigable])
+  }, [helpOpen, setHelpOpen, navigate, visible, newSession, navigable, panel])
 
   return (
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        // The dialog primitive gives focus back to what had it when the help opened; from
+        // the account menu that was a menu item, gone by now, and focus fell to <body>.
+        onCloseAutoFocus={(e) => {
+          const el = useCommandStore.getState().takeOpener()
+          if (el?.isConnected) {
+            e.preventDefault()
+            el.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t('common:shortcuts.title')}</DialogTitle>
           <DialogDescription>

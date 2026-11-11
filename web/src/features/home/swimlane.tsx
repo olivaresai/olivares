@@ -7,7 +7,9 @@
 // (no tick per call); a warn-tinted span waits on an approval, a dotted line waits for the
 // person's next prompt, a red tick is a failure, and the approval Needs you shows first is
 // the one orange mark. Each row opens its session in the Estate sheet. Dragging across
-// the rows, or choosing a ten-minute mark, selects a range and offers the Ledger for it.
+// the rows, or choosing a ten-minute mark, selects a range and offers the Ledger for it;
+// where the Ledger does not open for the person, the marks are plain times and nothing
+// selects.
 // The numbers are in each row's name and in the table under the rows; nothing moves but
 // the clock, so reduced motion changes nothing.
 import { useQueries } from '@tanstack/react-query'
@@ -30,6 +32,8 @@ import { StatusChip } from '@/components/ui/status-chip'
 import { AccountBadge } from '@/features/agent-tools/account-marks'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import type { ApprovalDTO } from '@/features/governance/types'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import { sessionsApi } from '@/features/sessions/api'
 import { CcStateBadge } from '@/features/sessions/cc-state-badge'
 import { runFolder } from '@/features/sessions/folder'
@@ -379,6 +383,10 @@ export function Swimlane({
   const untitled = t('recent.untitled')
   const shared = sharedNames(shown, untitled)
   const ticks = windowTicks(now)
+  // A range is chosen to open the Ledger: offered only where the Ledger opens.
+  const { navigable } = useViewAccess()
+  const ledger = viewById('audit')
+  const selects = !!ledger && navigable(ledger)
 
   // Range selection: a drag across the plot, or a ten-minute mark.
   const plotRef = useRef<HTMLDivElement>(null)
@@ -402,6 +410,7 @@ export function Swimlane({
     return now - WINDOW_MS + share * WINDOW_MS
   }
   const onPointerDown = (e: PointerEvent<HTMLElement>) => {
+    if (!selects) return
     if (e.button !== 0 || (e.target as HTMLElement).closest('a,button')) return
     const box = plotRef.current?.getBoundingClientRect()
     if (!box || e.clientX < box.left || e.clientX > box.right) return
@@ -497,27 +506,40 @@ export function Swimlane({
             data-testid="swimlane-plot"
             className="@container/axis relative h-7"
           >
-            {ticks.map((tick) => (
-              <button
-                key={tick}
-                type="button"
-                aria-label={t('swimlane.selectSlot', {
-                  from: clock(tick),
-                  to: clock(tick + TICK_MS),
-                })}
-                onClick={() => {
-                  focusLedger.current = true
-                  setRange({ a: tick, b: Math.min(tick + TICK_MS, now) })
-                }}
-                className={cn(
-                  'absolute top-0 h-7 -translate-x-1/2 rounded-full px-1.5 text-caption tabular-nums text-text-3 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus',
-                  narrowAxisHides(tick),
-                )}
-                style={{ left: pct(tick, now) }}
-              >
-                {clock(tick)}
-              </button>
-            ))}
+            {ticks.map((tick) =>
+              selects ? (
+                <button
+                  key={tick}
+                  type="button"
+                  aria-label={t('swimlane.selectSlot', {
+                    from: clock(tick),
+                    to: clock(tick + TICK_MS),
+                  })}
+                  onClick={() => {
+                    focusLedger.current = true
+                    setRange({ a: tick, b: Math.min(tick + TICK_MS, now) })
+                  }}
+                  className={cn(
+                    'absolute top-0 h-7 -translate-x-1/2 rounded-full px-1.5 text-caption tabular-nums text-text-3 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus',
+                    narrowAxisHides(tick),
+                  )}
+                  style={{ left: pct(tick, now) }}
+                >
+                  {clock(tick)}
+                </button>
+              ) : (
+                <span
+                  key={tick}
+                  className={cn(
+                    'absolute top-0 flex h-7 -translate-x-1/2 items-center px-1.5 text-caption tabular-nums text-text-3',
+                    narrowAxisHides(tick),
+                  )}
+                  style={{ left: pct(tick, now) }}
+                >
+                  {clock(tick)}
+                </span>
+              ),
+            )}
           </div>
           <span className="hidden justify-self-start pl-2 text-caption font-medium tabular-nums text-text @2xl/swim:inline">
             {t('swimlane.now', { at: clock(now) })}
@@ -675,33 +697,35 @@ export function Swimlane({
         </ol>
       </div>
 
-      <div className="mt-3 flex min-h-8 flex-wrap items-center gap-x-5 gap-y-2 text-caption text-text-3">
-        {selected && range ? (
-          <span className="flex flex-wrap items-center gap-2 text-text">
-            <span id="swimlane-range-text" className="tabular-nums">
-              {t('swimlane.range', {
-                from: clock(Date.parse(selected.since)),
-                to: clock(Date.parse(selected.until)),
-              })}
+      {selects ? (
+        <div className="mt-3 flex min-h-8 flex-wrap items-center gap-x-5 gap-y-2 text-caption text-text-3">
+          {selected && range ? (
+            <span className="flex flex-wrap items-center gap-2 text-text">
+              <span id="swimlane-range-text" className="tabular-nums">
+                {t('swimlane.range', {
+                  from: clock(Date.parse(selected.since)),
+                  to: clock(Date.parse(selected.until)),
+                })}
+              </span>
+              <Button asChild size="sm" variant="outline">
+                <Link
+                  ref={ledgerRef}
+                  to={'/audit' as never}
+                  search={selected as never}
+                  aria-describedby="swimlane-range-text"
+                >
+                  {t('swimlane.openLedger')}
+                </Link>
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clear}>
+                {t('swimlane.clear')}
+              </Button>
             </span>
-            <Button asChild size="sm" variant="outline">
-              <Link
-                ref={ledgerRef}
-                to={'/audit' as never}
-                search={selected as never}
-                aria-describedby="swimlane-range-text"
-              >
-                {t('swimlane.openLedger')}
-              </Link>
-            </Button>
-            <Button size="sm" variant="ghost" onClick={clear}>
-              {t('swimlane.clear')}
-            </Button>
-          </span>
-        ) : (
-          <span>{t('swimlane.hint')}</span>
-        )}
-      </div>
+          ) : (
+            <span>{t('swimlane.hint')}</span>
+          )}
+        </div>
+      ) : null}
 
       <ul
         className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-caption text-text-3"

@@ -156,7 +156,8 @@
     "statuses": {
       "active": "Active",
       "inactive": "Inactive",
-      "error": "Error"
+      "error": "Error",
+      "suspended": "Suspended"
     },
     "roles": {
       "viewer": "Viewer",
@@ -172,7 +173,25 @@
     "endSessions": "End sign-ins",
     "endSessionsFor": "End sign-ins for {{email}}?",
     "endSessionsBody": "Every active sign-in for {{email}} will stop working in this organization. Their sign-ins to other organizations, API tokens and account are not changed.",
-    "sessionsEnded": "Access to this organization ended"
+    "sessionsEnded": "Access to this organization ended",
+    "search": "Search people",
+    "filterLabel": "Filter by status",
+    "filterAll": "All statuses",
+    "noMatch": "Nobody matches",
+    "noMatchHint": "Change the search or the status filter.",
+    "bulkLabel": "Actions for the selected people",
+    "selected": "Selected: {{n}}",
+    "selectAll": "Select every person shown",
+    "selectRow": "Select {{email}}",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "suspendTitle": "Suspend access",
+    "suspendBody": "{{email}} can no longer sign in or use API tokens in this organization, effective immediately. Their role and groups stay, and you can reactivate them at any time.",
+    "suspendBodyMany": "{{n}} people can no longer sign in or use API tokens in this organization, effective immediately. Their roles and groups stay, and you can reactivate them at any time.",
+    "suspendFor": "Suspend {{email}}",
+    "reactivateFor": "Reactivate {{email}}",
+    "suspendedToast": "Suspended: {{n}}",
+    "reactivatedToast": "Reactivated: {{n}}"
   },
   "superadmins": {
     "title": "Installation administrators",
@@ -313,7 +332,7 @@
       "sessions": "The secret is removed from the store. A session that receives it keeps running, but it cannot be resumed, and a template that names it cannot launch, until you recreate it."
     },
     "sessionCaption": "Secrets a session can receive as environment variables. Names begin with env/. A value is never shown again.",
-    "credentialCaption": "Managed credentials a session can use through the engine's helpers (Business). Names begin with credential/. A value is never shown again.",
+    "credentialCaption": "Managed credentials a session can use through the engine's helpers (Olivares AI Business). Names begin with credential/. A value is never shown again.",
     "colValue": "Value",
     "colChanged": "Last changed",
     "colReference": "Reference",
@@ -937,7 +956,7 @@
   "activation": {
     "title": "Business activation",
     "caption": "Turn on the modules your edition includes. Controls with a safe default activate; controls that need a secret or a policy review are staged for you to fill and promote.",
-    "unavailable": "Activation is available in the Business edition.",
+    "unavailable": "Activation is available in the Olivares AI Business edition.",
     "enablePreset": "Enable a preset",
     "addon": "Module",
     "state": "State",

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -61,11 +62,82 @@ func (m *Module) callerMayUse(ctx context.Context, tenant model.TenantID, princi
 	return nil
 }
 
-// askProfileAccess is the caller's launch question, bound to the authenticated principal.
-func (m *Module) askProfileAccess(ctx context.Context, tenant model.TenantID, principal auth.Principal) func(profileRef, driver string) error {
-	return func(profileRef, driver string) error {
-		return m.callerMayUse(ctx, tenant, principal, profileRef, driver)
+// askProfileAccess is the caller's launch question, bound to the authenticated principal: a
+// login a person owns is theirs alone, then the assignments.
+func (m *Module) askProfileAccess(ctx context.Context, tenant model.TenantID, principal auth.Principal) func(ProviderProfile) error {
+	return func(prof ProviderProfile) error {
+		if err := ownerRefuses(prof, principal); err != nil {
+			return err
+		}
+		return m.callerMayUse(ctx, tenant, principal, prof.Ref, prof.Driver)
 	}
+}
+
+// ownerRefuses refuses everyone but its owner a profile that is one person's own login (the
+// vendors tie a subscription to one person). It sits under the assignments: an administrator
+// or an assignment never hands one person's login to another.
+func ownerRefuses(prof ProviderProfile, principal auth.Principal) error {
+	if prof.OwnerRef == "" || auth.PersonRefOf(principal).User == prof.OwnerRef {
+		return nil
+	}
+	return ErrProfileNotAssigned
+}
+
+// refuseAnotherPersonsRun is ownerRefuses for a session: one that runs on a person's own
+// login is acted on by that person only, in every edition. A run with no profile, or whose
+// profile is gone, runs on nobody's login.
+func (m *Module) refuseAnotherPersonsRun(ctx context.Context, tenant model.TenantID, rec model.Record, principal auth.Principal) error {
+	ref := storedProfileSnapshot(rec).ProfileID
+	if ref == "" {
+		return nil
+	}
+	prof, err := m.GetProfile(ctx, tenant, ref)
+	if errors.Is(err, ErrProfileNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return ownerRefuses(prof, principal)
+}
+
+// ownedRunRoutes is the one owner gate of the run routes: every route on one run that acts on
+// it (sessions:run:write, sessions:stop:write, sessions:run:admin) asks refuseAnotherPersonsRun
+// before its handler runs, so a route added later is gated too. The engine has already
+// answered an unknown or concealed run with its 404. Reads keep their own rules.
+type ownedRunRoutes struct {
+	api.RouteRegistrar
+	m *Module
+}
+
+func (o ownedRunRoutes) HandleEntity(method, pattern string, perm auth.Permission, ref api.EntityRef, h api.ModuleHandler) {
+	if ref.Kind == runKind && perm != permRunRead && perm != permRunOutput {
+		next, param := h, ref.IDParam
+		h = func(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+			rec, err := o.m.loadRun(r.Context(), mc.Tenant, chi.URLParam(r, param))
+			if err == nil {
+				err = o.m.refuseAnotherPersonsRun(r.Context(), mc.Tenant, rec, mc.Principal)
+			}
+			if err != nil {
+				writeRunErr(w, err)
+				return
+			}
+			next(w, r, mc)
+		}
+	}
+	o.RouteRegistrar.HandleEntity(method, pattern, perm, ref, h)
+}
+
+// refuseAnotherPersonsInput is the owner gate of the input ports a channel delivers a
+// person's message through (DeliverRuntimeInput, DeliverRuntimeInputChecked): it is asked
+// of the person the entry authorized, before the run is locked or touched.
+func (m *Module) refuseAnotherPersonsInput(ctx context.Context, request RuntimeInputRequest) error {
+	rec, err := m.loadRun(ctx, request.Target.Tenant, request.Target.RunRef)
+	if err != nil {
+		// The port's own answer for a run it cannot read.
+		return errors.Join(ErrRuntimeInputTarget, err)
+	}
+	return m.refuseAnotherPersonsRun(ctx, request.Target.Tenant, rec, request.Authority.Entry.Principal)
 }
 
 // requireProfileAccess answers the routes that act on one profile by its reference: a
@@ -393,14 +465,15 @@ func listVisibleBy[T any](m *Module, q model.Query, fetch func(model.Query) ([]T
 }
 
 // refuseUnassignedTarget is the move check on the profile a session would continue in:
-// the caller must be assigned it as for a launch.
+// the caller must be its owner and be assigned it, as for a launch.
 func (m *Module) refuseUnassignedTarget(ctx context.Context, mc api.ModuleContext, ref string) error {
-	if m.rt.ProfileAccess == nil {
+	prof, err := m.GetProfile(ctx, mc.Tenant, ref)
+	if err != nil && m.rt.ProfileAccess == nil {
+		// No assignment to ask: the move answers a target it cannot read itself, as before.
 		return nil
 	}
-	prof, err := m.GetProfile(ctx, mc.Tenant, ref)
 	if err != nil {
 		return err
 	}
-	return m.callerMayUse(ctx, mc.Tenant, mc.Principal, prof.Ref, prof.Driver)
+	return m.askProfileAccess(ctx, mc.Tenant, mc.Principal)(prof)
 }

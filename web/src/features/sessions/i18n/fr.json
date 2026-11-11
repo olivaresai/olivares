@@ -58,7 +58,9 @@
     "truncated": "Affichage des 200 premiers fichiers ou branches. Actualisez après avoir réduit les modifications.",
     "fileStatus": "Index : {{index}} ; arbre de travail : {{worktree}}",
     "commitHint": "Seules les modifications indexées sont incluses, avec le nom et l’adresse de votre profil.",
-    "working": "Traitement…"
+    "working": "Traitement…",
+    "nothingStaged": "Rien n’est encore indexé. Indexez un fichier pour l’inclure dans le commit.",
+    "noMessage": "Écrivez le message du commit."
   },
   "title": "Sessions",
   "refresh": "Actualiser",
@@ -638,10 +640,18 @@
       "todos": "Liste de tâches ({{done}} sur {{total}} terminées)",
       "send": "Envoyer la réponse",
       "answered": "Réponse envoyée : {{answer}}",
-      "sendFailed": "La réponse n'a pas pu être envoyée."
-    }
+      "sendFailed": "La réponse n'a pas pu être envoyée.",
+      "implement": "Implémenter",
+      "implementText": "Implémente le plan."
+    },
+    "cite": "Citer dans le champ de message"
   },
   "changes": {
+    "scope": "Portée des modifications",
+    "session": "Depuis le début de la session",
+    "latest": "Dernier tour",
+    "before": "Avant",
+    "after": "Après",
     "title": "Modifications dans {{folder}}",
     "titleNoFolder": "Modifications",
     "hint": "Fichiers que l’agent a modifiés dans son dossier depuis le début de cette session.",
@@ -728,6 +738,16 @@
       "empty": "Écrivez le commentaire.",
       "atBase": "à la base",
       "atTip": "en tête de branche"
+    },
+    "folder": {
+      "title": "Modifications non commitées",
+      "since": "Depuis le dernier commit sur <branch />.",
+      "sinceCommit": "Depuis le dernier commit ({{base}}).",
+      "empty": "Aucune modification depuis le dernier commit.",
+      "noCommit": "Ce dossier n’a encore aucun commit, il n’y a donc rien à comparer.",
+      "original": "Au dernier commit",
+      "modified": "Dans le dossier",
+      "fileTruncated": "Seul le début de chaque côté est affiché."
     }
   },
   "peers": {
@@ -921,11 +941,14 @@
     "scriptsFailed": "Impossible de lire les scripts du projet.",
     "stopScript": "Arrêter",
     "title": "Terminal",
+    "maximize": "Agrandir le terminal",
+    "restore": "Rétablir la taille du terminal",
     "hint": "Un shell dans le dossier de cette session, avec les mêmes limites que la session. Il s’exécute sous votre identité ; chaque ligne de commande saisie est enregistrée.",
     "open": "Ouvrir un terminal",
-    "close": "Fermer",
     "copy": "Copier",
     "paste": "Coller",
+    "selectAll": "Tout sélectionner",
+    "jumpToLatest": "Aller à la fin",
     "again": "Ouvrir un nouveau terminal",
     "reconnecting": "Reconnexion…",
     "ended": "Le terminal s’est terminé.",
@@ -938,7 +961,8 @@
       "step_up": "Confirmez d’abord votre identité, puis rouvrez le terminal.",
       "refused": "Vous n’avez pas le droit d’ouvrir un terminal dans ce dossier.",
       "busy": "Vous avez trop de terminaux ouverts. Fermez-en un d’abord.",
-      "failed": "Le terminal n’a pas pu s’ouvrir. Réessayez dans un instant."
+      "failed": "Le terminal n’a pas pu s’ouvrir. Réessayez dans un instant.",
+      "unsafe": "Cette commande n’a pas été exécutée : elle contient des caractères de contrôle ou masqués qui pourraient agir comme des frappes."
     },
     "keys": {
       "esc": "Échap",
@@ -947,7 +971,27 @@
       "up": "Haut",
       "down": "Bas"
     },
-    "closeLabel": "Fermer le terminal"
+    "starting": "Démarrage…",
+    "list": "Terminaux",
+    "new": "Nouveau terminal",
+    "split": "Diviser",
+    "unsplit": "Fermer la division",
+    "search": "Rechercher",
+    "actions": "Actions du terminal",
+    "searchLabel": "Rechercher dans le terminal",
+    "searchPrevious": "Occurrence précédente",
+    "searchNext": "Occurrence suivante",
+    "rename": "Renommer le terminal",
+    "renameHint": "Double-cliquez pour renommer",
+    "closeNamed": "Fermer {{name}}",
+    "closeTitle": "Fermer {{name}} ?",
+    "closeBody": "Cela termine le shell et tout ce qu'il a lancé.",
+    "closeConfirm": "Fermer le terminal",
+    "sendToAgent": "Envoyer à l'agent",
+    "sendToAgentHint": "Place la sortie sélectionnée dans votre message, où vous pouvez la modifier avant l'envoi.",
+    "contextLabel": "Sortie de {{name}} :",
+    "drawer": "Tiroir de terminaux",
+    "runInTerminal": "Exécuter dans le terminal"
   },
   "strip": {
     "needYou_one": "{{count}} vous attend",

@@ -42,6 +42,12 @@ export const PERMISSION_MODES: PermissionMode[] = [
   'bypassPermissions',
 ]
 
+/** Plan first: the tool reads and proposes, and changes nothing. */
+export const PLAN_MODE: PermissionMode = 'plan'
+/** The mode a session builds in: the engine's "Edits and commands" choice, a template
+ * over `dontAsk`. Plan first returns to it, and a plan is implemented under it. */
+export const BUILD_MODE: PermissionMode = 'dontAsk'
+
 /** `--effort` levels (GA set). `ultracode` is a session-orchestration mode, NOT an
  * effort value, so it is deliberately absent (matches the backend validation). */
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -370,6 +376,9 @@ export interface ProviderProfileDTO {
   }[]
   /** The hosts a confined session may reach beside its provider. */
   session_egress_hosts?: string[]
+  /** Claude Code only: the token count its sessions compact at. Absent is the tool's
+   * own default. */
+  auto_compact_window?: number
   created_at?: string
   updated_at?: string
   retired_at?: string
@@ -561,6 +570,8 @@ export interface PatchProfileRequest {
   provider_record_ref?: string
   /** Omitted preserves the grant; explicit null revokes its session authority. */
   session_work_grant?: SessionWorkGrantRequest | null
+  /** Claude Code's auto-compact window in tokens (100000 to 1000000); 0 withdraws it. */
+  auto_compact_window?: number
 }
 
 /** One source→profile binding (GET /provider-source-bindings): ONE configured source,
@@ -623,9 +634,14 @@ export interface ProviderAccountDTO {
   identity: string
   identity_source: 'none' | (string & {})
   last_login_at?: string
+  /** The plan the account's tool last reported, raw (`max`, `promax`). Absent is unknown. */
+  plan?: string
   /** The windows the account's tool last reported (Claude Code and Codex): `five_hour`,
    * `seven_day`, `seven_day:<model>` or a name of the tool's own. Absent is unknown. */
   usage?: ProviderAccountUsage[]
+  /** Claude Code only: the token count its sessions compact at. Absent is the tool's
+   * own default. */
+  auto_compact_window?: number
   created_at: string
   updated_at: string
 }
@@ -914,13 +930,18 @@ export interface SecretEnvRef {
 }
 
 /** A shell the person opened in a folder: its id and what the server holds it to. */
+/** The caller's own open terminals in a folder, oldest first. */
+export interface TerminalListDTO {
+  items: { terminal: string; confinement: string; started_at: string }[]
+}
+
 export interface TerminalDTO {
   terminal: string
   /** How the shell is confined; the server refuses to start one it cannot confine. */
   confinement: string
-  /** Seconds without input or output before the shell ends. */
+  /** Always 0: a shell has no idle limit. Kept for clients that read it. */
   idle_seconds: number
-  /** Seconds a closed browser tab may take to come back to the same shell. */
+  /** Always 0: a shell stays for the person to come back to. Kept for clients that read it. */
   reconnect_seconds: number
 }
 
@@ -1122,16 +1143,19 @@ export interface RunCheckpointDTO {
   at: string
   /** The newest turn until the next starts: its files are the changes so far. */
   open: boolean
-  files: { path: string; status: WorktreeDiffStatus }[]
+  files: WorktreeDiffFileDTO[]
   truncated: boolean
 }
 
 /** GET /v1/m/sessions/runs/{ref}/checkpoints: the session's turns, oldest first.
- * `available` is false, with a `reason`, when its folder cannot be checkpointed. */
+ * `available` is false, with a `reason`, when its folder cannot be checkpointed.
+ * `files` is what the folder differs by now from the start of the first turn. */
 export interface RunCheckpointsDTO {
   available: boolean
   reason?: string
   turns: RunCheckpointDTO[]
+  files: WorktreeDiffFileDTO[]
+  truncated: boolean
 }
 
 /** POST /v1/m/sessions/runs/{ref}/checkpoints/{seq}/rewind: what was put back. */
@@ -1152,14 +1176,27 @@ export interface RunChangedFileDTO {
 
 export type WorktreeDiffStatus = 'added' | 'modified' | 'deleted'
 
+/** One changed path between two trees; `added` and `removed` count its lines and are
+ * absent for a binary file (and for a turn kept before the engine counted them). */
+export interface WorktreeDiffFileDTO {
+  path: string
+  status: WorktreeDiffStatus
+  added?: number
+  removed?: number
+}
+
 /** GET /v1/m/sessions/runs/{ref}/diff: the paths the session's worktree branch changed
  * since it left the workspace's current commit (committed work only). `base` and `head`
- * are full commit ids. */
+ * are full commit ids. For a session that works in its Git folder directly the answer
+ * has `working_tree: true`: `base` is the folder's last commit, `head` is "", the other
+ * side is the folder as it is now, and `branch` is "" when that commit is detached. */
 export interface RunWorktreeDiffDTO {
   branch: string
   base: string
   head: string
-  files: { path: string; status: WorktreeDiffStatus }[]
+  /** Absent for a session's own worktree branch. */
+  working_tree?: boolean
+  files: WorktreeDiffFileDTO[]
   truncated: boolean
 }
 

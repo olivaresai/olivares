@@ -34,7 +34,7 @@ func TestLicenseInstallOnACommunityBuildNamesTheNextStep(t *testing.T) {
 	}
 	step := editionSwitchStep(installKind(), true)
 	for _, want := range []string{
-		"this installation runs the Community build",
+		"this installation runs Olivares AI Community",
 		"olivares upgrade --edition business",
 		step.Command, step.Then,
 	} {

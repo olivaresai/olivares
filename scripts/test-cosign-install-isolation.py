@@ -18,7 +18,7 @@ class CosignInstallIsolationTests(unittest.TestCase):
     def test_pr_installers_execute_while_shared_home_binary_is_being_written(self) -> None:
         workflow = (ROOT / ".github/workflows/pr-ci.yml").read_text()
         steps = re.findall(
-            r"^      - uses: sigstore/cosign-installer@[^\n]+\n"
+            r"^      - uses: \./\.github/actions/install-cosign[^\n]*\n"
             r"(?:(?!      - ).*\n)*", workflow, re.MULTILINE)
         self.assertEqual(len(steps), 2, "exercise build and userspace installers")
         for step in steps:

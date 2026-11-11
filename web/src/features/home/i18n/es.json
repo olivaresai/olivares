@@ -10,6 +10,19 @@
     "unavailableDescription": "La lectura de sesiones no ha respondido. Las cifras de arriba no se ven afectadas.",
     "untitled": "Sesión sin título"
   },
+  "folders": {
+    "title": "Tus carpetas",
+    "start": "Empezar",
+    "startIn": "Empezar en {{folder}}",
+    "canWork": "Puedes trabajar",
+    "readOnly": "Solo lectura",
+    "showAll": "Ver todas las carpetas ({{total}})",
+    "loading": "Cargando tus carpetas",
+    "emptyTitle": "Aún no tienes carpetas",
+    "emptyDescription": "Cuando tu administrador te dé acceso a una carpeta, aparecerá aquí.",
+    "unavailableTitle": "No se han podido cargar tus carpetas",
+    "unavailableDescription": "Tus sesiones de abajo no se ven afectadas."
+  },
   "empty": {
     "title": "Aún no hay nada que mostrar",
     "description": "Tu rol no concede acceso de lectura a ningún módulo del patrimonio. Pide a un administrador un permiso de lectura para ver el resumen."

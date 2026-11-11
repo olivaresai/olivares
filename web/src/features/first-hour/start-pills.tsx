@@ -52,7 +52,7 @@ const DEFAULT_EFFORT = ' default-effort'
 const PILL =
   'inline-flex h-7 min-w-0 max-w-56 shrink items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-2.5 text-caption text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 pointer-coarse:h-11'
 
-function Pill({
+export function Pill({
   label,
   children,
   className,

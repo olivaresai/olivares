@@ -154,7 +154,6 @@ type ProviderAccount struct {
 	Name           string
 	HomeMode       string
 	HomeGeneration int64
-	OwnerRef       string
 	ReleaseRef     string
 	PendingRelease string
 	IsolationLevel string
@@ -177,7 +176,6 @@ func accountFromRecord(rec model.Record) ProviderAccount {
 		Name:            rec.String(colPPAccountName),
 		HomeMode:        rec.String(colPPHomeMode),
 		HomeGeneration:  rec.Int(colPPHomeGeneration),
-		OwnerRef:        rec.String(colPPOwnerRef),
 		ReleaseRef:      rec.String(colPPReleaseRef),
 		PendingRelease:  rec.String(colPPPendingRelease),
 		IsolationLevel:  rec.String(colPPIsolationLevel),

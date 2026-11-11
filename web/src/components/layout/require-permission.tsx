@@ -4,11 +4,13 @@
 import { useRouterState } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { STATE_SENTENCE, STATE_TITLE } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Spinner } from '@/components/ui/spinner'
 import { useRouteAccess } from '@/features/navigation/authorization'
 import { viewLabel } from '@/features/navigation/model'
+import { useViewOpens } from '@/features/navigation/places'
 import { PermittedVisit } from '@/features/navigation/permitted-visit'
 import type { FeatureView } from '@/features/registry'
 import { useAuth } from '@/lib/auth/context'
@@ -16,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { useModuleEnabled } from '@/stores/modules'
 import { topBarLabel } from './document-title'
 import { ModuleOffPage } from './module-off-page'
+import { EditionRefusalNote } from './query-error-state'
 import { frameFor } from './page-frames'
 import { SystemAdminOnly } from './system-admin-only'
 // ⛔ THE MODULE THAT TRANSLATES REGISTERS ITS NAMESPACE. This gate renders four
@@ -63,6 +66,13 @@ export function RequirePermission({
   const search = useRouterState({ select: (s) => s.location.searchStr })
   const access = useRouteAccess(view, search)
   const moduleOn = useModuleEnabled()(view.permission, view.id)
+  // A view placed above the edition held here (registry `minEdition`) says the edition line
+  // in its place, to whoever may open it and reaches its address; navigation offers it only
+  // as a closed row (BusinessRows).
+  const edition = useViewOpens()(view) ? undefined : view.minEdition
+  const editionNote = edition ? (
+    <EditionRefusalNote refusal={{ edition, message: '' }} />
+  ) : null
   // ⛔ ONE POSITION, ALWAYS THE SAME ONE, AND ALWAYS AROUND THE ANSWER THIS GATE ALREADY
   //    DECIDED. A view may declare a continuity boundary (registry `continuity`); it is
   //    mounted here, wrapping `body` below — the protected children when they are
@@ -80,7 +90,9 @@ export function RequirePermission({
   //    A view that declares nothing renders exactly what it rendered before.
   const Continuity = view.continuity
   const notice =
-    access.kind === 'permitted' ? null : access.kind === 'checking' ? (
+    access.kind === 'permitted' ? (
+      editionNote
+    ) : access.kind === 'checking' ? (
       <CheckingNotice />
     ) : access.kind === 'forbidden' ? (
       <ForbiddenNotice systemOnly={view.permission === 'system:admin'} />
@@ -98,8 +110,9 @@ export function RequirePermission({
   // technology and is not painted twice.
   const label = viewLabel(t, view.id)
   const titleHidden = label === topBarLabel(t, view.path)
+  // A view the edition does not hold says so first: turning its module on cannot open it.
   const body =
-    !moduleOn && access.kind === 'permitted' ? (
+    !moduleOn && access.kind === 'permitted' && !editionNote ? (
       <ModuleOffPage view={view} titleHidden={titleHidden} />
     ) : notice ? (
       <>
@@ -114,7 +127,10 @@ export function RequirePermission({
       </>
     )
   return Continuity ? (
-    <Continuity admitted={access.kind === 'permitted'} access={access.observed}>
+    <Continuity
+      admitted={access.kind === 'permitted' && !editionNote}
+      access={access.observed}
+    >
       {body}
     </Continuity>
   ) : (
@@ -191,13 +207,9 @@ function GlobalAccountNotice() {
       role="status"
       aria-live="polite"
     >
-      <div className="max-w-md space-y-2 text-center">
-        <p className="text-body font-medium">
-          {t('capability.globalAccountTitle')}
-        </p>
-        <p className="text-body text-muted-foreground">
-          {t('capability.globalAccountBody')}
-        </p>
+      <div className="flex max-w-[480px] flex-col items-center gap-2 text-center">
+        <p className={STATE_TITLE}>{t('capability.globalAccountTitle')}</p>
+        <p className={STATE_SENTENCE}>{t('capability.globalAccountBody')}</p>
       </div>
     </div>
   )
@@ -219,15 +231,15 @@ function NeutralNotice({ undisclosed }: { undisclosed: boolean }) {
       role="status"
       aria-live="polite"
     >
-      <div className="max-w-md space-y-2 text-center">
-        <p className="text-body font-medium">
+      <div className="flex max-w-[480px] flex-col items-center gap-2 text-center">
+        <p className={STATE_TITLE}>
           {t(
             undisclosed
               ? 'capability.undisclosedTitle'
               : 'capability.unavailableTitle',
           )}
         </p>
-        <p className="text-body text-muted-foreground">
+        <p className={STATE_SENTENCE}>
           {t(
             undisclosed
               ? 'capability.undisclosedBody'

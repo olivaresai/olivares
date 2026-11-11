@@ -58,7 +58,9 @@
     "truncated": "Se muestran los primeros 200 archivos o ramas. Actualiza después de reducir los cambios.",
     "fileStatus": "Índice: {{index}}; árbol de trabajo: {{worktree}}",
     "commitHint": "Solo se incluyen los cambios preparados, con el nombre y correo de tu perfil.",
-    "working": "Procesando…"
+    "working": "Procesando…",
+    "nothingStaged": "Aún no hay nada preparado. Prepara un archivo para incluirlo en el commit.",
+    "noMessage": "Escribe el mensaje del commit."
   },
   "title": "Sesiones",
   "refresh": "Actualizar",
@@ -638,10 +640,18 @@
       "todos": "Lista de tareas ({{done}} de {{total}} hechas)",
       "send": "Enviar respuesta",
       "answered": "Respuesta enviada: {{answer}}",
-      "sendFailed": "No se pudo enviar la respuesta."
-    }
+      "sendFailed": "No se pudo enviar la respuesta.",
+      "implement": "Implementar",
+      "implementText": "Implementa el plan."
+    },
+    "cite": "Citar en el campo de mensaje"
   },
   "changes": {
+    "scope": "Alcance de los cambios",
+    "session": "Desde el inicio de la sesión",
+    "latest": "Último turno",
+    "before": "Antes",
+    "after": "Después",
     "title": "Cambios en {{folder}}",
     "titleNoFolder": "Cambios",
     "hint": "Ficheros que el agente ha cambiado en su carpeta desde que empezó esta sesión.",
@@ -728,6 +738,16 @@
       "empty": "Escribe el comentario.",
       "atBase": "en la base",
       "atTip": "en la punta de la rama"
+    },
+    "folder": {
+      "title": "Cambios pendientes de commit",
+      "since": "Desde el último commit en <branch />.",
+      "sinceCommit": "Desde el último commit ({{base}}).",
+      "empty": "No hay cambios desde el último commit.",
+      "noCommit": "Esta carpeta aún no tiene ningún commit, así que no hay nada con lo que comparar.",
+      "original": "En el último commit",
+      "modified": "En la carpeta",
+      "fileTruncated": "Solo se muestra el principio de cada lado."
     }
   },
   "peers": {
@@ -921,11 +941,14 @@
     "scriptsFailed": "No se pudieron leer los scripts del proyecto.",
     "stopScript": "Detener",
     "title": "Terminal",
+    "maximize": "Maximizar terminal",
+    "restore": "Restaurar tamaño del terminal",
     "hint": "Una consola en la carpeta de esta sesión, con los mismos límites que la sesión. Se ejecuta como tú; cada línea de comandos que escribes queda registrada.",
     "open": "Abrir terminal",
-    "close": "Cerrar",
     "copy": "Copiar",
     "paste": "Pegar",
+    "selectAll": "Seleccionar todo",
+    "jumpToLatest": "Ir a lo último",
     "again": "Abrir una terminal nueva",
     "reconnecting": "Reconectando…",
     "ended": "La terminal ha terminado.",
@@ -938,7 +961,8 @@
       "step_up": "Confirma primero tu identidad y vuelve a abrir la terminal.",
       "refused": "No tienes derecho a abrir una terminal en esta carpeta.",
       "busy": "Tienes demasiadas terminales abiertas. Cierra una primero.",
-      "failed": "No se pudo abrir la terminal. Inténtalo de nuevo en un momento."
+      "failed": "No se pudo abrir la terminal. Inténtalo de nuevo en un momento.",
+      "unsafe": "Este comando no se ejecutó: contiene caracteres de control u ocultos que podrían actuar como pulsaciones de teclas."
     },
     "keys": {
       "esc": "Esc",
@@ -947,7 +971,27 @@
       "up": "Arriba",
       "down": "Abajo"
     },
-    "closeLabel": "Cerrar terminal"
+    "starting": "Iniciando…",
+    "list": "Terminales",
+    "new": "Nuevo terminal",
+    "split": "Dividir",
+    "unsplit": "Cerrar división",
+    "search": "Buscar",
+    "actions": "Acciones del terminal",
+    "searchLabel": "Buscar en el terminal",
+    "searchPrevious": "Coincidencia anterior",
+    "searchNext": "Coincidencia siguiente",
+    "rename": "Renombrar terminal",
+    "renameHint": "Doble clic para renombrar",
+    "closeNamed": "Cerrar {{name}}",
+    "closeTitle": "¿Cerrar {{name}}?",
+    "closeBody": "Esto termina el shell y todo lo que inició.",
+    "closeConfirm": "Cerrar terminal",
+    "sendToAgent": "Enviar al agente",
+    "sendToAgentHint": "Pone la salida seleccionada en tu mensaje, donde puedes editarla antes de enviar.",
+    "contextLabel": "Salida de {{name}}:",
+    "drawer": "Panel de terminales",
+    "runInTerminal": "Ejecutar en el terminal"
   },
   "strip": {
     "needYou_one": "{{count}} te necesita",

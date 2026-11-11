@@ -84,6 +84,7 @@
     "notReady": "{{tool}} todavía no puede empezar.",
     "folder": "Carpeta",
     "folderHint": "Una carpeta de este servidor.",
+    "folderHintGiven": "La ruta de una carpeta ya registrada en este servidor. Las nuevas las registra un administrador.",
     "folderChoose": "Elige una carpeta",
     "folderNew": "Una carpeta nueva para esta sesión",
     "folderTyped": "Otra carpeta…",
@@ -111,6 +112,7 @@
     "credentialsManage": "Gestionar credenciales administradas",
     "listUnavailable": "El motor no respondió a la lista de secretos. Por ahora no se puede elegir nada.",
     "openTools": "Abrir Herramientas de IA",
+    "askAdmin": "Pida a un administrador que la deje lista.",
     "model": "Modelo",
     "providerDefault": "Predeterminado ({{model}})",
     "nativeDefault": "Predeterminado de {{tool}}",
@@ -123,14 +125,21 @@
     "profileNeedsKey": "Falta una clave",
     "foldersUnreadable": "No se pudieron leer las carpetas registradas. Escriba la ruta de una carpeta de este servidor.",
     "folderPermission": "Se inicia como {{name}}, el permiso predeterminado de esta carpeta.",
-    "autoAsks": "{{tool}} no tiene modo automático: preguntará antes de cada acción."
+    "autoAsks": "{{tool}} no tiene modo automático: preguntará antes de cada acción.",
+    "worktreeCheckout": "Checkout actual",
+    "worktreeNew": "Nuevo worktree",
+    "worktreeFrom": "Empezar desde",
+    "worktreeFromHint": "Rama o commit (opcional)",
+    "worktreeNewHint": "La sesión trabaja en una rama propia, en una carpeta aparte. El checkout no cambia.",
+    "worktreeLegend": "Copia de trabajo"
   },
   "composer": {
     "toolPill": "Herramienta y cuenta: {{value}}",
     "modelPill": "Modelo: {{value}}",
     "effortPill": "Esfuerzo: {{value}}",
     "folderPill": "Carpeta: {{value}}",
-    "moreOptions": "Más opciones"
+    "moreOptions": "Más opciones",
+    "worktreePill": "Copia de trabajo: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Carpetas registradas: {{count}} cargadas; hay más.",

@@ -575,9 +575,11 @@ export function RunCreateDialog({
         reason:
           err instanceof ApiError && err.status === 401
             ? t('readiness.unauthenticated')
-            : err instanceof ApiError && err.status === 403
+            : err instanceof ApiError && err.isForbidden
               ? t('readiness.forbidden')
-              : t('readiness.notFound'),
+              : err instanceof ApiError && err.isEditionRefusal
+                ? err.message
+                : t('readiness.notFound'),
       }
     if (readinessQuery.isFetching) return { reason: t('readiness.loading') }
     return { reason: t('create.blocked.readinessFailed'), action: reread }

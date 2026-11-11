@@ -2312,6 +2312,49 @@ describe('SessionConversation — copying a message', () => {
     writeSessionDraft(key, '')
   })
 
+  it('cites a selected passage: a toolbar by the selection puts the words in the composer as a quote', async () => {
+    const key = sessionDraftKey(
+      'demo',
+      { kind: 'user', actor: 'alice', user_id: 'alice' },
+      'run_1',
+    )!
+    writeSessionDraft(key, '')
+    wrap()
+    act(() => push(answered))
+    const range = document.createRange()
+    range.selectNodeContents(await screen.findByText('One'))
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    act(() => {
+      document.dispatchEvent(new Event('selectionchange'))
+    })
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Cite in composer' }),
+    )
+    expect(readSessionDraft(key)).toBe('> One\n\n')
+    window.getSelection()!.removeAllRanges()
+    writeSessionDraft(key, '')
+  })
+
+  it('offers no citing toolbar for words outside a reply', async () => {
+    wrap()
+    act(() => {
+      push(asked, 1)
+      push(answered, 2)
+    })
+    const range = document.createRange()
+    range.selectNodeContents(await screen.findByText('Look up the readme'))
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    act(() => {
+      document.dispatchEvent(new Event('selectionchange'))
+    })
+    expect(
+      screen.queryByRole('button', { name: 'Cite in composer' }),
+    ).not.toBeInTheDocument()
+    window.getSelection()!.removeAllRanges()
+  })
+
   it('does not quote a selection from outside the reply', async () => {
     const key = sessionDraftKey(
       'demo',

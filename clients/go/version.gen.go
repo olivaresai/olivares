@@ -9,7 +9,7 @@ const APIVersion = "v1"
 
 // SpecHash binds the OpenAPI snapshots the operation layer was generated
 // from (the stable core + beta module-route documents under web/openapi).
-const SpecHash = "a855622fc791662fa87bd870bf01787355fcb78e030669f911bb43980592f3b3"
+const SpecHash = "07dc2ee5c046c4894ee5e29b58148ce35ef1b9ff06643f6385be0abd7dd811cc"
 
 // StabilityPolicy is the public versioning/deprecation/sunset commitment
 // governing this surface.

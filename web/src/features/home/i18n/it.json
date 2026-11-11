@@ -10,6 +10,19 @@
     "unavailableDescription": "La lettura delle sessioni non ha risposto. Le cifre del parco qui sopra non sono influenzate.",
     "untitled": "Sessione senza titolo"
   },
+  "folders": {
+    "title": "Le tue cartelle",
+    "start": "Inizia",
+    "startIn": "Inizia in {{folder}}",
+    "canWork": "Puoi lavorare",
+    "readOnly": "Sola lettura",
+    "showAll": "Mostra tutte le cartelle ({{total}})",
+    "loading": "Caricamento delle tue cartelle",
+    "emptyTitle": "Non hai ancora cartelle",
+    "emptyDescription": "Quando il tuo amministratore ti darà accesso a una cartella, comparirà qui.",
+    "unavailableTitle": "Impossibile caricare le tue cartelle",
+    "unavailableDescription": "Le tue sessioni qui sotto non sono interessate."
+  },
   "empty": {
     "title": "Ancora niente da mostrare",
     "description": "Il tuo ruolo non concede l'accesso in lettura a nessun modulo del parco. Chiedi a un amministratore un permesso di lettura per vedere il riepilogo."

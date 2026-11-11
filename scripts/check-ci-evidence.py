@@ -16,12 +16,17 @@ DELIVERABLES = {
     ('appliance-image.yml', 'appliance-image-artifacts-${{ github.run_id }}-${{ github.run_attempt }}'),
     ('security-feed.yml', 'security-feed'),
 }
+# Restored by later jobs through needs.<job>.outputs.attempt, which is this run's attempt, so the
+# consumer's download name never matches the upload name text: the restore is a gate input.
+RESTORED_BY_NEEDS = {
+    ('merge-gate-check.yml', 'community-tree-${{ github.run_id }}-${{ github.run_attempt }}'),
+}
 PRESERVE = './.github/actions/ci-evidence'
 VEHICLE = 'python3 ci-evidence-vehicle/.github/actions/ci-evidence/preserve.py'
 
 
 def required_upload(workflow: dict, filename: str, name: str) -> bool:
-    if (filename, name) in DELIVERABLES:
+    if (filename, name) in DELIVERABLES or (filename, name) in RESTORED_BY_NEEDS:
         return True
     for job in workflow['jobs'].values():
         for step in job.get('steps', []):

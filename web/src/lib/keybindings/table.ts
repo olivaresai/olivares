@@ -62,6 +62,8 @@ const PREVIOUS_SESSION_CHORD = 'Mod+Shift+Enter'
 /** A command's group, for the one page that documents the table. */
 export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'palette.open': 'general',
+  'shell.sidebar': 'general',
+  'shell.panel': 'general',
   'ask.open': 'general',
   'session.new': 'general',
   'session.previous': 'general',
@@ -74,6 +76,7 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'launcher.focus': 'launcher',
   'launcher.start': 'launcher',
   'launcher.startBackground': 'launcher',
+  'launcher.stash': 'launcher',
   'surface.terminal': 'surface',
   'surface.changes': 'surface',
   'surface.preview': 'surface',
@@ -106,6 +109,8 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
 export const KEYBINDINGS: readonly KeyRule[] = [
   // ── shell-wide ────────────────────────────────────────────────────────────
   { command: 'palette.open', keys: 'Mod+k' },
+  { command: 'shell.sidebar', keys: 'Mod+b' },
+  { command: 'shell.panel', keys: 'Mod+Alt+b' },
   // Ask Olivares: outside a field only, so the chord can never be typed into one; the
   // palette's "Ask Olivares…" opens it from anywhere.
   { command: 'ask.open', keys: 'Alt+Shift+a', when: 'outsideField' },
@@ -138,6 +143,9 @@ export const KEYBINDINGS: readonly KeyRule[] = [
     keys: 'Mod+Enter',
     when: 'launcherFocused',
   },
+  // Sets the draft aside (the browser's Save is never wanted in a field), or brings back
+  // the one set aside when the field is empty.
+  { command: 'launcher.stash', keys: 'Mod+s', when: 'launcherFocused' },
 
   // ── the work surface ──────────────────────────────────────────────────────
   { command: 'surface.terminal', keys: 'Mod+j', when: 'workSurface' },

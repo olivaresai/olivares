@@ -145,6 +145,10 @@
     "expiredAt": "Expirée {{time}}",
     "approveOnce": "Approuver une fois",
     "approveForSession": "Approuver pour cette session",
+    "allowances": "Autorisations de cette session",
+    "revokeAllowance": "Révoquer",
+    "sessionPolicy": "La politique exige un examen de chaque demande.",
+    "allowancesError": "Impossible de lire ou modifier les autorisations de la session.",
     "approving": "Approbation…",
     "deny": "Rejeter",
     "noMatch": "Aucune demande ne correspond à la recherche",
@@ -196,10 +200,11 @@
     "reasonHint": "Contexte pour les relecteurs (facultatif).",
     "requiredApprovals": "Approbations requises",
     "requiredApprovalsHint": "Ignoré si une politique d’approbation correspondante s’applique — la politique fait autorité.",
-    "expiresInSeconds": "Expire dans (secondes)",
-    "escalateInSeconds": "Escalade dans (secondes)",
     "submit": "Soumettre la demande",
-    "created": "Demande d’approbation ouverte"
+    "created": "Demande d’approbation ouverte",
+    "expiresIn": "Expire dans",
+    "escalateIn": "Escalade dans",
+    "subjectFold": "À quoi cela s'applique (facultatif)"
   },
   "detail": {
     "title": "Demande d’approbation",
@@ -278,23 +283,20 @@
     "denyImplicit": "Refus (implicite)",
     "requiredApprovals": "Approbations requises",
     "requiredApprovalsHint": "De 0 à 64. Vide ou 0 utilise la valeur par défaut du moteur, qui peut être plus élevée pour les actions critiques.",
-    "expiresInSeconds": "Expire dans (secondes)",
-    "expiresInSecondsHint": "0–31536000 (0 = jamais).",
-    "escalateInSeconds": "Escalade dans (secondes)",
-    "escalateInSecondsHint": "0–31536000 (0 = jamais).",
     "countError": "Saisissez un nombre entier de 0 à {{max}}.",
     "matchAction": "Action à faire correspondre",
     "matchActionHint": "Vide = correspond à toute action.",
     "matchSubjectKind": "Type de sujet à faire correspondre",
     "matchSubjectKindHint": "Vide = correspond à tout type de sujet.",
-    "needsBusiness": "Un niveau de risque ou un nombre d'approbations différent de la valeur par défaut de l'action nécessite Business. Désactivez cette politique pour la conserver enregistrée.",
     "create": "Créer la politique",
     "save": "Enregistrer les modifications",
     "confirmCreateBody": "Une politique ABAC activée restreint davantage l’accès immédiatement ; une politique d’approbation activée commence à exiger des approbations humaines pour les actions correspondantes. Prend effet immédiatement.",
     "confirmUpdateBody": "Si elle est activée, la modification prend effet immédiatement sur le chemin d’autorisation / le flux d’approbation. Le type de politique ne peut pas être modifié.",
     "created": "Politique créée",
     "updated": "Politique mise à jour",
-    "credentialWarning": "Cela ressemble à une valeur d’identifiants. Les règles de politique ne portent que des références et des sélecteurs — jamais un secret."
+    "credentialWarning": "Cela ressemble à une valeur d’identifiants. Les règles de politique ne portent que des références et des sélecteurs — jamais un secret.",
+    "expiresIn": "Expire dans",
+    "escalateIn": "Escalade dans"
   },
   "policyRemove": {
     "title": "Supprimer cette politique ?",
@@ -735,5 +737,15 @@
       "editor": "Éditeur",
       "owner": "Propriétaire"
     }
+  },
+  "durations": {
+    "none": "Sans limite",
+    "h1": "1 heure",
+    "h4": "4 heures",
+    "h8": "8 heures",
+    "h24": "24 heures",
+    "d7": "7 jours",
+    "d30": "30 jours",
+    "seconds": "{{value}} secondes"
   }
 }

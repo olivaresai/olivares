@@ -17,9 +17,11 @@ export function reviewCommentText(
   place: ReviewCommentPlace,
   lineText: string,
   comment: string,
+  comparison?: string,
 ): string {
   const version =
-    place.side === 'original' ? 'at the base' : 'at the branch tip'
+    comparison ??
+    (place.side === 'original' ? 'at the base' : 'at the branch tip')
   const line = lineText.replace(/\r$/, '')
   const quoted =
     line.length > QUOTED_LINE_MAX ? `${line.slice(0, QUOTED_LINE_MAX)}…` : line

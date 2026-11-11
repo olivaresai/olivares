@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -141,10 +142,17 @@ func readCedarMutationInputs(ctx context.Context, sc store.Scope) (cedarMutation
 }
 
 func compileProspectiveCedar(authored string, inputs cedarMutationInputs) error {
-	if _, err := compileGrantSet(mergeCedarSources(mergeCedarSources(authored, inputs.managedForEvaluation), inputs.adopted)); err != nil {
-		return validationError("cedar policy would not compile in the active authored+managed+adopted union: " + err.Error())
+	_, err := prospectiveCedarSet(authored, inputs)
+	return err
+}
+
+// prospectiveCedarSet compiles the authored+managed+adopted union a mutation would enforce.
+func prospectiveCedarSet(authored string, inputs cedarMutationInputs) (*grantSet, error) {
+	set, err := compileGrantSet(mergeCedarSources(mergeCedarSources(authored, inputs.managedForEvaluation), inputs.adopted))
+	if err != nil {
+		return nil, validationError("cedar policy would not compile in the active authored+managed+adopted union: " + err.Error())
 	}
-	return nil
+	return set, nil
 }
 
 // cedarExpectedState constructs the durable identity a Cedar writer committed. The
@@ -398,6 +406,16 @@ type pdpEngineSourceBody struct {
 	Engine string `json:"engine"`
 	Source string `json:"source"`
 	Note   string `json:"note,omitempty"`
+	// Tests, when present, replaces the tenant's stored policy tests (Cedar publish only).
+	Tests *[]pdpPolicyTest `json:"tests,omitempty"`
+}
+
+// pdpPolicyTest is one expectation an administrator writes about the policy: this
+// request is allowed, or denied. A publish that breaks one is refused with its name.
+type pdpPolicyTest struct {
+	Name    string            `json:"name"`
+	Request pdpExampleRequest `json:"request"`
+	Expect  string            `json:"expect"` // allow | deny
 }
 
 type pdpRequestBody struct {
@@ -415,6 +433,9 @@ type pdpExampleRequest struct {
 	Principal struct {
 		Kind string `json:"kind"`
 		ID   string `json:"id,omitempty"`
+		// Person, when present, tests as that person (user id or email): the engine uses
+		// their stored role and groups in this tenant instead of an anonymous example.
+		Person string `json:"person,omitempty"`
 	} `json:"principal"`
 	Permission string `json:"permission"`
 	Tenant     string `json:"tenant,omitempty"`
@@ -565,6 +586,8 @@ type pdpActivePolicy struct {
 	Managed     pdpActiveSurface `json:"managed"`
 	Adopted     pdpActiveSurface `json:"adopted"`
 	UnionSHA256 string           `json:"union_sha256,omitempty"`
+	// Tests are the administrator's stored policy tests every Cedar publish must keep.
+	Tests []pdpPolicyTest `json:"tests,omitempty"`
 	// LiveActivation is applied|deferred|not_applicable|no_policy — the publish
 	// vocabulary plus no_policy, which only a READ can be in (a publish always has
 	// a revision). It is the SAME vocabulary the
@@ -623,6 +646,19 @@ func buildAuthRequest(in pdpExampleRequest, fallback model.TenantID) auth.Reques
 			Sensitivity: in.Resource.Sensitivity, Extra: in.Resource.Extra,
 		},
 	}
+}
+
+// readPolicyTests returns the tenant's stored policy tests and their stored form.
+func readPolicyTests(ctx context.Context, sc store.Scope) ([]pdpPolicyTest, string, error) {
+	content, _, found, err := latestActiveSelection(ctx, sc, surfaceCedarTests)
+	if err != nil || !found {
+		return nil, "", err
+	}
+	var tests []pdpPolicyTest
+	if err := json.Unmarshal([]byte(content), &tests); err != nil {
+		return nil, "", fmt.Errorf("governance: stored policy tests: %w", err)
+	}
+	return tests, content, nil
 }
 
 // --- handlers ----------------------------------------------------------------
@@ -725,6 +761,14 @@ func (m *Module) pdpEvaluateCandidate(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	req := buildAuthRequest(in.Request, mc.Tenant)
+	if person := strings.TrimSpace(in.Request.Principal.Person); person != "" {
+		subject, err := m.policyTestPerson(r.Context(), mc, person)
+		if err != nil {
+			writePolicyTestPersonError(w, err)
+			return
+		}
+		req.Principal, req.Tenant = subject, mc.Tenant
+	}
 	if engine == surfaceOPA {
 		// The authored Rego is not deployed to the sidecar, so a CANDIDATE cannot be
 		// evaluated in-process. Be honest: the PDP layer imposes no restriction here
@@ -761,6 +805,50 @@ func (m *Module) pdpEvaluateCandidate(w http.ResponseWriter, r *http.Request, mc
 			{Rule: "operator forbid rules (restriction)", Effect: "forbid", Matched: effect == auth.EffectForbid},
 		},
 	})
+}
+
+// policyTestPersonRefusal is why a policy test cannot run as the person it names.
+type policyTestPersonRefusal struct {
+	status  int
+	message string
+}
+
+func (e policyTestPersonRefusal) Error() string { return e.message }
+
+// policyTestPerson builds the principal of a named person from the store, exactly as
+// their login would (roles and gated groups, the store's only notion of them). It
+// discloses that person's standing, so it takes the policy administrator's permission
+// and refuses a workspace-confined administrator, like the effective-rights read. A
+// person the store does not know and one with no membership here answer alike.
+func (m *Module) policyTestPerson(ctx context.Context, mc api.ModuleContext, ref string) (auth.Principal, error) {
+	if !mc.Admits(ctx, permPolicyAdmin, auth.ResourceFor(permPolicyAdmin)) {
+		return auth.Principal{}, policyTestPersonRefusal{http.StatusForbidden, "testing a policy as a named person requires policy administration"}
+	}
+	if _, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confined {
+		return auth.Principal{}, policyTestPersonRefusal{http.StatusForbidden, "testing a policy as a named person spans the whole tenant"}
+	}
+	if m.approvalAuthenticator == nil {
+		return auth.Principal{}, policyTestPersonRefusal{http.StatusServiceUnavailable, "this deployment cannot look up people for a policy test"}
+	}
+	subject, found, err := m.approvalAuthenticator.PrincipalForUser(ctx, ref, auth.AAL1)
+	if err != nil {
+		return auth.Principal{}, err
+	}
+	if !found || !(subject.Superadmin || subject.IsMember(mc.Tenant)) {
+		return auth.Principal{}, policyTestPersonRefusal{http.StatusNotFound, "no such person in this organization"}
+	}
+	return subject, nil
+}
+
+// writePolicyTestPersonError answers a refusal with its status and any other failure
+// as a store error.
+func writePolicyTestPersonError(w http.ResponseWriter, err error) {
+	var refusal policyTestPersonRefusal
+	if errors.As(err, &refusal) {
+		writeJSON(w, refusal.status, errorBody(refusal.message))
+		return
+	}
+	writeStoreError(w, err)
 }
 
 // grantEffectReason frames a dry-run grant decision in the three-valued terms so
@@ -933,7 +1021,8 @@ func (m *Module) handlePdpActive(w http.ResponseWriter, r *http.Request, mc api.
 			out.Adopted = pdpActiveSurface{Present: true, Revision: selection.adopted, SHA256: contentDigest(cedarSnapshot.adopted)}
 		}
 		out.UnionSHA256 = cedarSnapshot.state.unionDigest
-		return nil
+		out.Tests, _, e = readPolicyTests(r.Context(), sc)
+		return e
 	})
 	if err != nil {
 		writeStoreError(w, err)

@@ -43,6 +43,7 @@ func runtimePermissions() []auth.Permission {
 
 // runtimeRoutes mounts the operate endpoints under /v1/m/sessions/.
 func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
+	reg = ownedRunRoutes{RouteRegistrar: reg, m: m}
 	reg.Handle("GET", "/git-attribution-settings", permRunRead, m.handleGitAttributionSettings)
 	reg.Handle("PUT", "/git-attribution-settings", permRunAdmin, m.handleGitAttributionSettings)
 	// run_ref is a tenant-unique public reference, not the run row's primary ID.
@@ -1106,6 +1107,7 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	ctx := r.Context()
+	var deltaVersion uint64
 	for {
 		wake := lr.ring.wait() // snapshot BEFORE reading (no lost wake-up)
 		rd := lr.ring.readFrom(cursor)
@@ -1141,6 +1143,12 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 			_ = writeSSE(rc, w, "page", attachPage{Type: "page", Earlier: rd.earlier})
 			return
 		}
+		if rd.delta != nil && rd.deltaVersion != deltaVersion {
+			if writeSSE(rc, w, "delta", rd.delta) != nil {
+				return
+			}
+		}
+		deltaVersion = rd.deltaVersion
 		cursor = rd.next
 		if rd.closed {
 			_ = writeSSE(rc, w, "end", map[string]any{"type": "end"})

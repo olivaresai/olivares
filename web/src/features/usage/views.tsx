@@ -7,7 +7,8 @@ import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
 
 // The lead of Usage & cost: each account's official windows, nearest its limit first, and
-// what today's sessions used. Budgets and Adoption follow it in the place.
+// what today's sessions used. Budgets and Adoption follow it in the place. It opens on the
+// accounts read: a member, who runs sessions but reads no organisation account, has no Usage.
 const UsageView = lazy(() =>
   import('./usage-view').then((m) => ({ default: m.UsageView })),
 )
@@ -24,7 +25,7 @@ export const VIEWS = [
     },
     helpHref: '/reference/console',
     icon: ChartNoAxesColumn,
-    permission: 'sessions:run:read',
+    permission: 'sessions:account:read',
     element: lazyView(UsageView),
   },
 ] satisfies ViewEntry[]

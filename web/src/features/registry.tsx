@@ -3,6 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
+import type { PaidEdition } from '@/components/ui/edition-note'
 import type {
   CapabilityAccess,
   NormalizedCapabilityQuestion,
@@ -525,6 +526,15 @@ export interface FeatureView {
     access: CapabilityAccess | null
     children: ReactNode
   }>
+  /**
+   * OPTIONAL: the lowest edition that holds this view, in the engine's order
+   * (license.EditionCovers). The shell honours it for any view that carries it, through
+   * editionCovers: where the edition held here does not hold it, the view leaves the
+   * navigation, an administrator finds it as a closed row on its place's page, and its
+   * address says the edition line in place of the view. Absent: it opens in every edition.
+   * No Community view carries it; the enterprise overlay sets it on its own views.
+   */
+  minEdition?: PaidEdition
 }
 
 /**

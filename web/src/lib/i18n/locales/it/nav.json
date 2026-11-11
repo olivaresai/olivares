@@ -370,18 +370,27 @@
       "placeholder": "Invio mette un messaggio in coda per dopo questo turno",
       "placeholderSteer": "Invio lo mette in coda per dopo questo turno, Ctrl+Invio lo reindirizza ora",
       "discarded": "La sessione è stata rilasciata con questi messaggi ancora in coda:",
-      "copy": "Copia"
-    }
+      "copy": "Copia",
+      "placeholderQueueKey": "{{key}} mette un messaggio in coda per dopo questo turno",
+      "placeholderSteerKey": "{{key}} lo reindirizza ora"
+    },
+    "stash": "Metti da parte questa bozza",
+    "stashRestore": "Ripristina la bozza messa da parte",
+    "plan": "Piano",
+    "planHint": "Prima il piano: lo strumento legge e propone un piano, senza modificare nulla. Vale dal prossimo messaggio."
   },
   "shell": {
     "more": "Altro",
     "searchCommands": "Cerca e comandi",
     "search": "Cerca",
+    "searchGo": "Cerca o vai a…",
     "stopAll": "Ferma tutto",
     "workspaceCount": "Workspace: {{count}}",
     "rail": {
       "title": "Sessioni",
-      "all": "Tutte",
+      "seeAll_one": "Vedi {{count}} sessione",
+      "seeAll_many": "Vedi tutte le {{count}} sessioni",
+      "seeAll_other": "Vedi tutte le {{count}} sessioni",
       "groups": {
         "needsYou": "Ti aspetta",
         "working": "In corso",
@@ -431,10 +440,10 @@
     "killswitch": {
       "estateStopped": "TUTTI GLI AGENTI SONO FERMI",
       "estateBody": "Gli agenti non possono agire finché due account utente non approvano la ripartenza.",
-      "agentStops": "{{count}} arresto di agenti attivo",
-      "agentStops_one": "{{count}} arresto di agenti attivo",
-      "agentStops_many": "{{count}} arresti di agenti attivi",
-      "agentStops_other": "{{count}} arresti di agenti attivi",
+      "agentStops": "{{count}} agent arrestati",
+      "agentStops_one": "{{count}} agent arrestato",
+      "agentStops_many": "{{count}} agent arrestati",
+      "agentStops_other": "{{count}} agent arrestati",
       "none": "Nulla è fermo. Sessioni e agenti funzionano normalmente."
     },
     "status": {
@@ -442,6 +451,9 @@
       "running_one": "{{count}} sessione aperta",
       "running_many": "{{count}} sessioni aperte",
       "running_other": "{{count}} sessioni aperte",
+      "needYou_one": "{{count}} ti aspetta",
+      "needYou_many": "{{count}} ti aspettano",
+      "needYou_other": "{{count}} ti aspettano",
       "usage": "Utilizzo di {{tool}}",
       "fiveHour": "5 h",
       "week": "sett.",
@@ -452,7 +464,6 @@
     },
     "collapse": "Comprimi la navigazione",
     "expand": "Espandi la navigazione",
-    "openNavigation": "Apri la navigazione",
     "closeNavigation": "Chiudi la navigazione"
   },
   "places": {
@@ -478,6 +489,10 @@
     "securityRedTeam": "Esecuzioni e punteggi del red team",
     "operationsDeploy": "Distribuire agenti su altri host",
     "operationsResidency": "Residenza dei dati e tenant",
-    "retentionSchedules": "Le pianificazioni vengono applicate solo in Olivares Business: questa edizione le conserva e non elimina nulla."
+    "retentionSchedules": "Le pianificazioni vengono applicate solo in Olivares AI Business: questa edizione le conserva e non elimina nulla."
+  },
+  "groups": {
+    "control": "Governance",
+    "admin": "Amministrazione"
   }
 }

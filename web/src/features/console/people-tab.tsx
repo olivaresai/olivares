@@ -48,6 +48,9 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { ListTruncationBadge } from '@/features/_intel'
+import { BUSINESS_BUILD } from '@/features/business-build'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { useOfferedPanels } from '@/features/panels'
 import { ApiError } from '@/lib/api/errors'
 import { isEngineEmail } from '@/lib/email'
 import { useAuth } from '@/lib/auth/context'
@@ -86,6 +89,7 @@ export function PeopleTab({
   // The internal-superadmin lifecycle is global and remains superadmin-only.
   const canReadSupers = can('user:read', { tenant: null })
   const canManageSupers = can('user:write', { tenant: null })
+  const addActions = useOfferedPanels(PANEL_EXTENSIONS.peopleActions ?? [])
   const [onboardButtonOpen, setOnboardButtonOpen] = useState(false)
   const onboardOpen = onboardButtonOpen || (inviteRequested && canOnboard)
   const setOnboardOpen = (open: boolean) => {
@@ -95,6 +99,15 @@ export function PeopleTab({
   const [revoke, setRevoke] = useState<InviteDTO | null>(null)
   const [toggle, setToggle] = useState<OnboardedUser | null>(null)
   const [memberToggle, setMemberToggle] = useState<RosterMemberDTO | null>(null)
+  // The roster as the person narrows it, and the people a bulk action is about.
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'active' | 'suspended'
+  >('all')
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [suspendTargets, setSuspendTargets] = useState<
+    RosterMemberDTO[] | null
+  >(null)
 
   const invites = useQuery({
     queryKey: consoleKeys.invites(activeTenant),
@@ -140,6 +153,27 @@ export function PeopleTab({
     onDone: () => setMemberToggle(null),
   })
 
+  // Suspending keeps the person: their sessions and tokens stop at once and their role
+  // and groups stay (Business). Reactivating restores them as they were.
+  const suspendMutation = usePrivilegedMutation<
+    { members: RosterMemberDTO[]; suspend: boolean },
+    unknown
+  >({
+    mutationFn: async ({ members: targets, suspend }) => {
+      for (const m of targets)
+        await consoleApi.setMemberSuspended(m.user_id, suspend)
+    },
+    invalidateKeys: () => [consoleKeys.members(activeTenant)],
+    successMessage: (_data, vars) =>
+      vars.suspend
+        ? t('console:members.suspendedToast', { n: vars.members.length })
+        : t('console:members.reactivatedToast', { n: vars.members.length }),
+    onDone: () => {
+      setSuspendTargets(null)
+      setSelected(new Set())
+    },
+  })
+
   // the lost-device reset of a member's TOTP factor. The confirm dialog is
   // the guard the row's one-click label alone cannot be.
   const [totpResetTarget, setTotpResetTarget] =
@@ -183,6 +217,26 @@ export function PeopleTab({
     (m) => m.role === 'owner' && m.status === 'active',
   ).length
   const supers = superadmins.data?.items ?? []
+  const needle = search.trim().toLowerCase()
+  const shown = roster.filter(
+    (m) =>
+      (statusFilter === 'all' ||
+        (statusFilter === 'suspended'
+          ? m.status === 'suspended'
+          : m.status === 'active')) &&
+      (needle === '' ||
+        m.email.toLowerCase().includes(needle) ||
+        (m.display_name ?? '').toLowerCase().includes(needle)),
+  )
+  // Suspend and reactivate are the Business department surface; Community has none.
+  const canSuspend = BUSINESS_BUILD && canManageMembers
+  const mayBeSuspended = (m: RosterMemberDTO) =>
+    m.status === 'active' &&
+    m.user_id !== principal?.user_id &&
+    !(m.role === 'owner' && activeOwners <= 1)
+  const picked = roster.filter((m) => selected.has(m.user_id))
+  const pickedToSuspend = picked.filter(mayBeSuspended)
+  const pickedToReactivate = picked.filter((m) => m.status === 'suspended')
 
   return (
     <div className="flex flex-col gap-6 pt-4">
@@ -196,12 +250,17 @@ export function PeopleTab({
               {t('console:people.caption')}
             </p>
           </div>
-          {canOnboard && (
-            <Button onClick={() => setOnboardOpen(true)}>
-              <UserPlus />
-              {t('console:people.onboard')}
-            </Button>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {addActions.map(({ id, Component }) => (
+              <Component key={id} />
+            ))}
+            {canOnboard && (
+              <Button onClick={() => setOnboardOpen(true)}>
+                <UserPlus />
+                {t('console:people.onboard')}
+              </Button>
+            )}
+          </div>
         </div>
       </section>
 
@@ -249,42 +308,166 @@ export function PeopleTab({
             description={t('console:members.noneHint')}
           />
         ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <XScroll>
-              <StaticTable>
-                <thead>
-                  <tr>
-                    <th>{t('console:members.user')}</th>
-                    <th>{t('console:people.role')}</th>
-                    <th>{t('console:members.groups')}</th>
-                    <th>{t('console:members.status')}</th>
-                    <th className="text-right">
-                      {t('console:members.action')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roster.map((member) => (
-                    <RosterMemberRow
-                      key={member.user_id}
-                      member={member}
-                      canManage={canManageMembers}
-                      // Never offered on your own row or on the organization's only
-                      // active owner: either would lock the organization out.
-                      canRemove={
-                        member.user_id !== principal?.user_id &&
-                        !(member.role === 'owner' && activeOwners <= 1)
-                      }
-                      onToggle={setMemberToggle}
-                      onResetTOTP={setTotpResetTarget}
-                      canEndSessions={member.user_id !== principal?.user_id}
-                      onEndSessions={setSessionsTarget}
-                    />
-                  ))}
-                </tbody>
-              </StaticTable>
-            </XScroll>
-          </div>
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="search"
+                className="w-64"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('console:members.search')}
+                aria-label={t('console:members.search')}
+              />
+              <Select
+                value={statusFilter}
+                onValueChange={(v) =>
+                  setStatusFilter(v as 'all' | 'active' | 'suspended')
+                }
+              >
+                <SelectTrigger
+                  className="w-44"
+                  aria-label={t('console:members.filterLabel')}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {t('console:members.filterAll')}
+                  </SelectItem>
+                  <SelectItem value="active">
+                    {t('console:members.statuses.active')}
+                  </SelectItem>
+                  {BUSINESS_BUILD ? (
+                    <SelectItem value="suspended">
+                      {t('console:members.statuses.suspended')}
+                    </SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+              {canSuspend && picked.length > 0 ? (
+                <div
+                  className="ml-auto flex flex-wrap items-center gap-2"
+                  role="group"
+                  aria-label={t('console:members.bulkLabel')}
+                >
+                  <span className="text-caption text-muted-foreground">
+                    {t('console:members.selected', { n: picked.length })}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pickedToSuspend.length === 0}
+                    onClick={() => setSuspendTargets(pickedToSuspend)}
+                  >
+                    {t('console:members.suspend')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      pickedToReactivate.length === 0 ||
+                      suspendMutation.isPending
+                    }
+                    onClick={() =>
+                      suspendMutation.mutate({
+                        members: pickedToReactivate,
+                        suspend: false,
+                      })
+                    }
+                  >
+                    {t('console:members.reactivate')}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+            {shown.length === 0 ? (
+              <EmptyState
+                icon={<Users />}
+                title={t('console:members.noMatch')}
+                description={t('console:members.noMatchHint')}
+              />
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-border">
+                <XScroll>
+                  <StaticTable>
+                    <thead>
+                      <tr>
+                        {canSuspend ? (
+                          <th className="w-10">
+                            <input
+                              type="checkbox"
+                              aria-label={t('console:members.selectAll')}
+                              checked={
+                                shown.length > 0 &&
+                                shown.every((m) => selected.has(m.user_id))
+                              }
+                              onChange={(e) =>
+                                setSelected(
+                                  e.target.checked
+                                    ? new Set(shown.map((m) => m.user_id))
+                                    : new Set(),
+                                )
+                              }
+                            />
+                          </th>
+                        ) : null}
+                        <th>{t('console:members.user')}</th>
+                        <th>{t('console:people.role')}</th>
+                        <th>{t('console:members.groups')}</th>
+                        <th>{t('console:members.status')}</th>
+                        <th className="text-right">
+                          {t('console:members.action')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shown.map((member) => (
+                        <RosterMemberRow
+                          key={member.user_id}
+                          member={member}
+                          canManage={canManageMembers}
+                          showSelect={canSuspend}
+                          selected={selected.has(member.user_id)}
+                          onSelect={(on) =>
+                            setSelected((prev) => {
+                              const next = new Set(prev)
+                              if (on) next.add(member.user_id)
+                              else next.delete(member.user_id)
+                              return next
+                            })
+                          }
+                          onSuspend={
+                            canSuspend && mayBeSuspended(member)
+                              ? () => setSuspendTargets([member])
+                              : undefined
+                          }
+                          onReactivate={
+                            canSuspend && member.status === 'suspended'
+                              ? () =>
+                                  suspendMutation.mutate({
+                                    members: [member],
+                                    suspend: false,
+                                  })
+                              : undefined
+                          }
+                          // Never offered on your own row or on the organization's only
+                          // active owner: either would lock the organization out.
+                          canRemove={
+                            member.user_id !== principal?.user_id &&
+                            !(member.role === 'owner' && activeOwners <= 1)
+                          }
+                          onToggle={setMemberToggle}
+                          onResetTOTP={setTotpResetTarget}
+                          canEndSessions={member.user_id !== principal?.user_id}
+                          onEndSessions={setSessionsTarget}
+                        />
+                      ))}
+                    </tbody>
+                  </StaticTable>
+                </XScroll>
+              </div>
+            )}
+          </>
         )}
       </section>
 
@@ -493,6 +676,31 @@ export function PeopleTab({
         </DialogContent>
       </Dialog>
 
+      {suspendTargets ? (
+        <RequireAssurance minAal={AAL.HARDWARE} action="console">
+          <ConfirmDialog
+            open
+            onOpenChange={(open) => !open && setSuspendTargets(null)}
+            title={t('console:members.suspendTitle')}
+            description={
+              suspendTargets.length === 1
+                ? t('console:members.suspendBody', {
+                    email: suspendTargets[0]?.email,
+                  })
+                : t('console:members.suspendBodyMany', {
+                    n: suspendTargets.length,
+                  })
+            }
+            confirmLabel={t('console:members.suspend')}
+            tone="danger"
+            pending={suspendMutation.isPending}
+            onConfirm={() =>
+              suspendMutation.mutate({ members: suspendTargets, suspend: true })
+            }
+          />
+        </RequireAssurance>
+      ) : null}
+
       {memberToggle ? (
         <RequireAssurance minAal={AAL.HARDWARE} action="console">
           <ConfirmDialog
@@ -592,6 +800,11 @@ function RosterMemberRow({
   onResetTOTP,
   canEndSessions,
   onEndSessions,
+  showSelect,
+  selected,
+  onSelect,
+  onSuspend,
+  onReactivate,
 }: {
   member: RosterMemberDTO
   canManage: boolean
@@ -601,18 +814,36 @@ function RosterMemberRow({
   onResetTOTP: (member: RosterMemberDTO) => void
   canEndSessions: boolean
   onEndSessions: (member: RosterMemberDTO) => void
+  /** Business: the row's checkbox for a bulk action. */
+  showSelect?: boolean
+  selected?: boolean
+  onSelect?: (on: boolean) => void
+  /** Business: set when the member may be suspended / reactivated. */
+  onSuspend?: () => void
+  onReactivate?: () => void
 }) {
   const { t } = useTranslation(['console', 'common'])
   const active = member.status === 'active'
   const canEnd = canManage && active && canEndSessions
   const canReset = canManage && !member.sso_only
   const canDrop = canManage && canRemove
+  const hasMenu = canEnd || canReset || canDrop || !!onSuspend || !!onReactivate
   const displayName =
     member.display_name && member.display_name !== member.email
       ? member.display_name
       : undefined
   return (
     <tr>
+      {showSelect ? (
+        <td className="w-10">
+          <input
+            type="checkbox"
+            aria-label={t('console:members.selectRow', { email: member.email })}
+            checked={!!selected}
+            onChange={(e) => onSelect?.(e.target.checked)}
+          />
+        </td>
+      ) : null}
       <td>
         {/* ONE LINE, name › detail › meta. The member cell stacked the address over
             the display name over an SSO badge, three rows of one line each, and the
@@ -665,7 +896,7 @@ function RosterMemberRow({
         </Badge>
       </td>
       <td className="text-right">
-        {canEnd || canReset || canDrop ? (
+        {hasMenu ? (
           <div className="flex items-center justify-end gap-2">
             {/* An account the deployment suspended cannot be re-activated by an
                 organization; removing it is the one thing this organization can do. */}
@@ -689,6 +920,26 @@ function RosterMemberRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {onSuspend ? (
+                  <DropdownMenuItem
+                    onSelect={onSuspend}
+                    aria-label={t('console:members.suspendFor', {
+                      email: member.email,
+                    })}
+                  >
+                    {t('console:members.suspend')}
+                  </DropdownMenuItem>
+                ) : null}
+                {onReactivate ? (
+                  <DropdownMenuItem
+                    onSelect={onReactivate}
+                    aria-label={t('console:members.reactivateFor', {
+                      email: member.email,
+                    })}
+                  >
+                    {t('console:members.reactivate')}
+                  </DropdownMenuItem>
+                ) : null}
                 {canEnd ? (
                   <DropdownMenuItem
                     onSelect={() => onEndSessions(member)}
@@ -734,6 +985,7 @@ function RosterMemberRow({
 
 function memberStatusVariant(status: RosterMemberDTO['status']) {
   if (status === 'active') return 'success'
+  if (status === 'suspended') return 'warning'
   if (status === 'error') return 'danger'
   return 'neutral'
 }

@@ -43,8 +43,27 @@ vi.mock('@/features/claude-policy/api', async (importOriginal) => {
   return { ...actual, claudePolicyApi: api }
 })
 
+const ext = vi.hoisted(() => ({
+  authoring: undefined as
+    | { publish: ReturnType<typeof vi.fn>; rollback: ReturnType<typeof vi.fn> }
+    | undefined,
+}))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: {
+      ...actual.PANEL_EXTENSIONS,
+      get cedarPolicyAuthoring() {
+        return ext.authoring
+      },
+    },
+  }
+})
+
 import { CedarOpaView } from '@/features/claude-policy/cedar-opa-view'
 import '@/features/claude-policy/i18n'
+import { ApiError } from '@/lib/api/errors'
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -126,7 +145,7 @@ describe('Community stored policy management', () => {
     wrap(<CedarOpaView active />)
     expect(
       await screen.findByText(
-        'Editing custom policies, roles and grants requires Business.',
+        'Editing custom policies, roles and grants requires Olivares AI Business.',
       ),
     ).toBeInTheDocument()
     expect(
@@ -178,7 +197,7 @@ describe('Community stored policy management', () => {
     ).toBeInTheDocument()
     expect(
       screen.queryByText(
-        'Editing custom policies, roles and grants requires Business.',
+        'Editing custom policies, roles and grants requires Olivares AI Business.',
       ),
     ).not.toBeInTheDocument()
   })
@@ -204,4 +223,39 @@ it('reads stored Cedar revision source without offering activation', async () =>
   expect(
     screen.queryByRole('button', { name: /^Activate/i }),
   ).not.toBeInTheDocument()
+})
+
+it('publishes a test written from the example and keeps a refusal on screen', async () => {
+  const refusal =
+    'not published, policy tests failed: "viewers locked out" expected deny, the policy answers allow'
+  ext.authoring = {
+    publish: vi
+      .fn()
+      .mockRejectedValue(new ApiError(400, 'bad_request', refusal)),
+    rollback: vi.fn(),
+  }
+  const user = userEvent.setup()
+  wrap(<CedarOpaView active />)
+
+  await user.type(
+    await screen.findByLabelText('Test name'),
+    'viewers locked out',
+  )
+  await user.click(screen.getByRole('button', { name: 'Add as a test' }))
+  await user.click(screen.getByRole('button', { name: 'Publish' }))
+  await user.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Publish',
+    }),
+  )
+
+  await waitFor(() =>
+    expect(ext.authoring?.publish).toHaveBeenCalledWith(
+      expect.any(String),
+      undefined,
+      [expect.objectContaining({ name: 'viewers locked out', expect: 'deny' })],
+    ),
+  )
+  expect(await screen.findByRole('alert')).toHaveTextContent(refusal)
+  ext.authoring = undefined
 })

@@ -59,25 +59,16 @@ NOTICES FOR THIRD-PARTY COMPONENTS:
     signal peer names are fixed; user namespace creation and mount are permitted.
     Copyright The Moby Authors. Licensed under the Apache License, Version 2.0.
 
-  * Inter Variable font, Latin subset (web/src/assets/fonts/inter/), vendored
-    verbatim from the Fontsource 5.3.0 build of Inter (https://github.com/rsms/inter).
-    Copyright 2016 The Inter Project Authors.
+  * Adwaita Sans font (variable, weights 100-900) and Adwaita Mono font (weights 400
+    and 700), Latin subsets (web/src/assets/fonts/adwaita-sans/,
+    web/src/assets/fonts/adwaita-mono/), made with fontTools from the unmodified files
+    of the GNOME release adwaita-fonts 49.0 (https://gitlab.gnome.org/GNOME/adwaita-fonts).
+    Copyright (c) 2016, The Inter Project Authors (https://github.com/rsms/inter).
+    Copyright (c) 2015-2025, Renzhi Li (aka. Belleve Invis, belleve@typeof.net).
+    Copyright (c) 2025, Jamie Gravendeel (https://jamie.garden).
+    Copyright (c) 2025, Florian Müllner.
     Licensed under the SIL Open Font License, Version 1.1; the license text ships
-    with the console as web/public/licenses/fonts/Inter-OFL.txt.
-
-  * Space Grotesk Variable font, Latin subset (web/src/assets/fonts/space-grotesk/),
-    vendored verbatim from the Fontsource 5.3.0 build of Space Grotesk
-    (https://github.com/floriankarsten/space-grotesk).
-    Copyright 2020 The Space Grotesk Project Authors.
-    Licensed under the SIL Open Font License, Version 1.1; the license text ships
-    with the console as web/public/licenses/fonts/SpaceGrotesk-OFL.txt.
-
-  * JetBrains Mono font, Latin subset, weights 400 and 500
-    (web/src/assets/fonts/jetbrains-mono/), vendored verbatim from the Fontsource
-    5.2.8 build of JetBrains Mono (https://github.com/JetBrains/JetBrainsMono).
-    Copyright 2020 The JetBrains Mono Project Authors.
-    Licensed under the SIL Open Font License, Version 1.1; the license text ships
-    with the console as web/public/licenses/fonts/JetBrainsMono-OFL.txt.
+    with the console as web/public/licenses/fonts/AdwaitaFonts-OFL.txt.
 
   * OpenAI Whisper tiny speech model (multilingual), in the ONNX export
     onnx-community/whisper-tiny at revision ff4177021cc41f7db950912b73ea4fdf7d01d8e7
@@ -90,9 +81,15 @@ NOTICES FOR THIRD-PARTY COMPONENTS:
     MIT License; the license text ships with the console as
     web/public/licenses/whisper/Whisper-MIT.txt.
 
+  * lobe-icons, @lobehub/icons-static-svg 1.102.0 (https://github.com/lobehub/lobe-icons):
+    the path data of seven AI tool and provider marks (Claude, OpenAI, Grok, Google
+    Gemini, Ollama, OpenCode, Cursor), unaltered, in web/src/components/ui/vendor-marks.ts.
+    Copyright (c) 2023 LobeHub. MIT License; the text ships with the console as
+    web/public/licenses/lobe-icons/LICENSE.txt. The marks are trademarks of their
+    owners and imply no endorsement.
+
   * Simple Icons 16.36.0 (https://github.com/simple-icons/simple-icons): the path
-    data of seven vendor marks (Claude, Google Gemini, Ollama, OpenCode, Cursor,
-    GitHub, GitLab), unaltered, in web/src/components/ui/vendor-marks.ts. Copyright Simple Icons
+    data of two vendor marks (GitHub, GitLab), unaltered, in web/src/components/ui/vendor-marks.ts. Copyright Simple Icons
     contributors. CC0 1.0 Universal; the text ships with the console as
     web/public/licenses/simple-icons/LICENSE.txt. The marks are trademarks of their
     owners and imply no endorsement.

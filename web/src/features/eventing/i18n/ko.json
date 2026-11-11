@@ -96,7 +96,7 @@
       "maxAttempts": "최대 시도는 0 또는 1~20이어야 합니다.",
       "initialInterval": "초기 간격은 0 또는 5~3600초여야 합니다."
     },
-    "businessRequired": "SIEM 전달 및 외부 텔레메트리 내보내기에는 Business가 필요합니다. 저장된 설정은 보존되며 Community는 이를 보내지 않습니다."
+    "businessRequired": "SIEM 전달 및 외부 텔레메트리 내보내기에는 Olivares AI Business가 필요합니다. 저장된 설정은 보존되며 Olivares AI Community는 이를 보내지 않습니다."
   },
   "secret": {
     "title": "구독 비밀",

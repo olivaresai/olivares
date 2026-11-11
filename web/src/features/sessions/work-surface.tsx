@@ -54,6 +54,7 @@ import { IconTip } from './icon-tip'
 import { FILTER_FROM, filterSessions } from './session-filter'
 import { groupOf, inSection } from './session-groups'
 import { SessionStrip } from './session-strip'
+import { TerminalHost, useTerminalDrawer } from './terminal-drawer'
 import { SessionNarrative } from './session-narrative'
 import { BESIDE_PANE, CONTEXT_PANE, LIST_PANE } from './surface-resize'
 import { useAutoTitle } from './use-auto-title'
@@ -90,7 +91,9 @@ export interface WorkSurfaceProps {
   onRetry?: () => void
   /** The side pane's tab was chosen (`?panel=`). */
   onPanel?: (panel: string) => void
-  /** The 48 px head of the list column: name, count, New session and the views menu. */
+  /** The page's heading and verbs (name, count, New session, the views menu). Always the
+   * root's first child: it reaches the shell's header from every state of this surface and
+   * stays mounted across them, so the focus it restores is not taken again. */
   listHeader?: React.ReactNode
   /** The foot of the list: what it does not show, and Load more. */
   listFooter?: React.ReactNode
@@ -254,6 +257,14 @@ export function WorkSurface({
     queryFn: ({ signal }) => agentOpsApi.changes(run!.run_ref, { signal }),
     enabled: !!run,
   })
+  // An address that names the terminal (`?panel=terminal`, a link kept from the side tab it
+  // used to be) opens the drawer.
+  const wantsTerminal = address.panel === 'terminal' && !!run?.workspace_ref
+  const terminalRun = run?.run_ref
+  useEffect(() => {
+    if (wantsTerminal && terminalRun)
+      useTerminalDrawer.getState().setOpen(terminalRun, true)
+  }, [wantsTerminal, terminalRun])
   const changedRun = changes.data?.files.length ? run?.run_ref : undefined
   const [seenChangedRun, setSeenChangedRun] = useState<string>()
   if (seenChangedRun !== changedRun) {
@@ -434,20 +445,40 @@ export function WorkSurface({
         command !== 'surface.terminal'
       )
         return
+      if (command === 'shell.panel') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (e.repeat) return
+        const next = !(detailsBeside || sheetOpen)
+        setContextOpen(next)
+        if (!besideFits) {
+          if (next) openSheet(document.activeElement)
+          else closeSheet()
+        }
+        return
+      }
+      // The terminal is the drawer under the conversation, not a tab of the side pane.
+      if (
+        command === 'surface.terminal' &&
+        run?.workspace_ref &&
+        can('sessions:workspace:write')
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!e.repeat) useTerminalDrawer.getState().toggle(run.run_ref)
+        return
+      }
       const panel =
-        command === 'surface.terminal'
-          ? 'terminal'
-          : command === 'surface.changes'
-            ? 'changes'
-            : command === 'surface.preview'
-              ? 'preview'
-              : null
+        command === 'surface.changes'
+          ? 'changes'
+          : command === 'surface.preview'
+            ? 'preview'
+            : null
       if (
         panel &&
         onPanel &&
         run &&
-        (panel === 'preview' || run.workspace_ref) &&
-        (panel !== 'terminal' || can('sessions:workspace:write'))
+        (panel === 'preview' || run.workspace_ref)
       ) {
         e.preventDefault()
         e.stopPropagation()
@@ -548,7 +579,7 @@ export function WorkSurface({
           : COMPOSER_INPUT_ID
         : undefined
     return (
-      <>
+      <TerminalHost run={beside ? undefined : currentRun}>
         <SessionNarrative
           resolution={current}
           composerId={composerId}
@@ -612,7 +643,7 @@ export function WorkSurface({
             }}
           />
         ) : null}
-      </>
+      </TerminalHost>
     )
   }
 
@@ -631,10 +662,7 @@ export function WorkSurface({
     />
   )
 
-  // THE FIRST SCREEN IS THE WORK SCREEN. A person who can start a session has the same three
-  // regions as with one open, the composer in the middle; on a phone, the composer under the
-  // list's header, or above the list when sessions are listed. No region says "Select a
-  // session" or offers a New session of its own (26.10.1 review).
+  // A new session uses the work region; the sidebar already holds the work list.
   if (
     !loading &&
     emptyAction &&
@@ -642,109 +670,28 @@ export function WorkSurface({
   )
     return (
       <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
         data-testid="work-surface"
-        style={surfaceVars}
-        className="flex min-h-0 min-w-0 flex-1 flex-col [--ctx-w:304px] [--list-w:292px] max-[1350px]:[--ctx-w:280px] max-[1350px]:[--list-w:264px] min-[761px]:grid min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)] min-[1120px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]"
       >
-        <section
-          id={paneId('rail')}
-          aria-label={t('surface.pane.rail')}
-          className={cn(
-            'flex min-h-0 min-w-0 shrink-0 flex-col border-line min-[761px]:border-r',
-            sessions.length > 0 &&
-              'max-[760px]:order-last max-[760px]:flex-1 max-[760px]:shrink max-[760px]:border-t',
-          )}
-        >
-          {listHeader}
-          <div
-            className={cn(
-              'min-h-0 flex-1 overflow-y-auto',
-              sessions.length === 0
-                ? 'hidden place-items-center min-[761px]:grid'
-                : 'block',
-            )}
-          >
-            {rail}
-          </div>
-          {listFooter}
-        </section>
-        <section
-          id={paneId('narrative')}
-          aria-label={t('surface.pane.narrative')}
-          className={cn(
-            'min-h-0 min-w-0 flex-1 overflow-y-auto',
-            sessions.length > 0 && 'max-[760px]:flex-none',
-          )}
-        >
-          {emptyAction}
-        </section>
-        <section
-          id={paneId('context')}
-          aria-label={t('surface.pane.context')}
-          className="hidden min-h-0 min-w-0 overflow-y-auto border-l border-line p-4 text-body text-text-2 min-[1120px]:block"
-        >
-          {t('activity.empty')}
-        </section>
+        {listHeader}
+        {emptyAction}
       </div>
     )
 
-  // NOTHING TO LIST IS ONE FACT. For a person who cannot start a session, the rail's empty
-  // state is the whole surface.
-  if (!loading && sessions.length === 0 && !resolution.target)
+  // The list is a destination of its own, never a second column beside the thread.
+  if (!resolution.target || address.pane === 'rail')
     return (
       <div
         className="flex min-h-0 min-w-0 flex-1 flex-col"
         data-testid="work-surface"
       >
-        <section
-          id={paneId('rail')}
-          aria-label={t('surface.pane.rail')}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          {listHeader}
-          <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto">
-            {rail}
-          </div>
-          {listFooter}
-        </section>
-      </div>
-    )
-
-  return (
-    <div
-      className="flex min-h-0 min-w-0 flex-1 flex-col"
-      data-testid="work-surface"
-    >
-      <div
-        ref={surfaceGrid}
-        data-context={detailsBeside ? 'open' : 'closed'}
-        style={surfaceVars}
-        className={cn(
-          // The list is 292 px wide and Details 304 px, 264 and 280 px at 1350 px and below
-          // (the regression design); the conversation takes the rest. A row's title is cut with an
-          // ellipsis and its whole text is on the row's hover.
-          // A person can drag either edge (--list-w, --ctx-w are then set inline); each
-          // pane stops at 35% of the surface, so a width stored on a wide screen never
-          // squeezes the thread on a narrow one.
-          'relative grid min-h-0 flex-1 [--ctx-w:304px] [--list-w:292px] max-[1350px]:[--ctx-w:280px] max-[1350px]:[--list-w:264px]',
-          // ONE column template: a media-prefixed one beside another would outrank it.
-          detailsBeside
-            ? 'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]'
-            : 'min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)]',
-        )}
-      >
+        {listHeader}
         <section
           ref={railSection}
           id={paneId('rail')}
           aria-label={t('surface.pane.rail')}
-          className={cn(
-            'flex min-h-0 min-w-0 flex-col border-line min-[761px]:border-r',
-            // The list stays beside whatever is in front from 761 px: the thread or the
-            // thread beside it.
-            address.pane !== 'rail' && 'hidden min-[761px]:flex',
-          )}
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
         >
-          {listHeader}
           {strip ? <SessionStrip {...strip} show={show} /> : null}
           {showFilter ? (
             <div className="shrink-0 px-3 pb-2">
@@ -790,24 +737,34 @@ export function WorkSurface({
           {listFooter}
           {menu.dialogs}
         </section>
-        {/* Where the list ends: below 761 px the list is a screen of its own; from there it
-            stays beside whatever is in front, so its edge does too. */}
-        <PaneResizeHandle
-          pane={LIST_PANE}
-          container={surfaceGrid}
-          target={railSection}
-          grow={1}
-          label={t('surface.resize.rail')}
-          style={{ left: 'min(var(--list-w), 35%)' }}
-          className="-translate-x-1/2 max-[760px]:hidden"
-        />
+      </div>
+    )
 
-        <div
-          className={cn(
-            'flex min-h-0 min-w-0 flex-col overflow-clip',
-            address.pane === 'rail' && 'hidden min-[761px]:flex',
-          )}
-        >
+  return (
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      data-testid="work-surface"
+    >
+      {listHeader}
+      <div
+        ref={surfaceGrid}
+        data-context={detailsBeside ? 'open' : 'closed'}
+        style={surfaceVars}
+        className={cn(
+          // The list is 292 px wide and Details 304 px, 264 and 280 px at 1350 px and below
+          // (the regression design); the conversation takes the rest. A row's title is cut with an
+          // ellipsis and its whole text is on the row's hover.
+          // A person can drag either edge (--list-w, --ctx-w are then set inline); each
+          // pane stops at 35% of the surface, so a width stored on a wide screen never
+          // squeezes the thread on a narrow one.
+          'relative grid min-h-0 flex-1 [--ctx-w:304px] [--list-w:292px] max-[1350px]:[--ctx-w:280px] max-[1350px]:[--list-w:264px]',
+          // ONE column template: a media-prefixed one beside another would outrank it.
+          detailsBeside
+            ? 'grid-cols-[minmax(0,1fr)_min(var(--ctx-w),35%)]'
+            : 'grid-cols-1',
+        )}
+      >
+        <div className={cn('flex min-h-0 min-w-0 flex-col overflow-clip')}>
           {/* A phone shows one pane: the strip is above the conversation too, and its
               filters bring the list in front. */}
           {strip ? (
@@ -885,7 +842,6 @@ export function WorkSurface({
                 // such question.
                 split &&
                   'outline-none focus-within:ring-1 focus-within:ring-focus focus-within:ring-inset',
-                address.pane === 'rail' && 'hidden min-[761px]:flex',
                 split &&
                   address.pane === 'beside' &&
                   'hidden min-[1280px]:flex',

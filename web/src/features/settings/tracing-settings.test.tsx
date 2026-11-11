@@ -67,7 +67,7 @@ it('saves the collector and enabled choice, then displays the engine effective s
   expect(screen.getByText('Tracing is off.')).toBeInTheDocument()
   expect(
     screen.queryByText(
-      'SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them.',
+      'SIEM delivery and external telemetry export require Olivares AI Business. Stored settings are preserved; Olivares AI Community does not send them.',
     ) !== null,
   ).toBe(!PANEL_EXTENSIONS.operationsExportAvailable)
 })

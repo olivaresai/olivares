@@ -24,6 +24,7 @@ var errorRemedy = map[string]string{
 	"activation_unavailable":                 "",
 	"active_content_unapproved":              "",
 	"addon_requires_license":                 "Add this add-on to your license: https://olivares.ai/pricing",
+	"edition_required":                       "Add a license in Settings > Edition, or see https://olivares.ai/pricing",
 	"already_running":                        "",
 	"approval_denied":                        "",
 	"approval_required":                      "",

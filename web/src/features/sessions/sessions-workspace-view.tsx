@@ -116,9 +116,10 @@ const ALL = '__all__'
  * this list must not conflate them:
  *
  *  · REFUSED — the engine said "not you" for THIS read: 403, including the assurance
- *    403 `step_up_required` (errors.ts:77), and 401. The half's admission is gone NOW,
- *    so nothing it returned earlier may keep being painted: rows, stream overrides,
- *    origin labels, counts and the row-backed open target all leave with it.
+ *    403 `step_up_required` (errors.ts:77) and an edition refusal, and 401. The half's
+ *    admission is gone NOW, so nothing it returned earlier may keep being painted: rows,
+ *    stream overrides, origin labels, counts and the row-backed open target all leave
+ *    with it.
  *  · BROKE — a 5xx, a network failure, a 404. Admission was never withdrawn; the read
  *    failed. The last answer stays on screen under the "could not be read" notice, and
  *    the OTHER half is not touched. Calling this a permission denial would teach the
@@ -129,7 +130,11 @@ const ALL = '__all__'
  */
 function esRechazo(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false
-  return error.isStepUpRequired || error.isForbidden || error.isUnauthenticated
+  return (
+    error.isStepUpRequired ||
+    error.isForbiddenOrEdition ||
+    error.isUnauthenticated
+  )
 }
 
 /**

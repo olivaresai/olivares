@@ -156,7 +156,8 @@
     "statuses": {
       "active": "活动",
       "inactive": "非活动",
-      "error": "错误"
+      "error": "错误",
+      "suspended": "已停用"
     },
     "roles": {
       "viewer": "查看者",
@@ -172,7 +173,25 @@
     "endSessionsFor": "结束 {{email}} 的登录？",
     "endSessionsBody": "{{email}} 的所有活动登录在此组织中都将失效。其在其他组织的登录、API 令牌和账户不会更改。",
     "sessionsEnded": "已结束对此组织的访问",
-    "totpResetDone": "TOTP 因子已重置。"
+    "totpResetDone": "TOTP 因子已重置。",
+    "search": "搜索成员",
+    "filterLabel": "按状态筛选",
+    "filterAll": "所有状态",
+    "noMatch": "没有匹配的成员",
+    "noMatchHint": "请更改搜索词或状态筛选。",
+    "bulkLabel": "对所选成员的操作",
+    "selected": "已选择：{{n}}",
+    "selectAll": "选择显示的所有成员",
+    "selectRow": "选择 {{email}}",
+    "suspend": "停用",
+    "reactivate": "恢复",
+    "suspendTitle": "停用访问",
+    "suspendBody": "{{email}} 将立即无法登录此组织，也无法使用 API 令牌。其角色和群组保持不变，你可以随时恢复。",
+    "suspendBodyMany": "{{n}} 位成员将立即无法登录此组织，也无法使用 API 令牌。其角色和群组保持不变，你可以随时恢复。",
+    "suspendFor": "停用 {{email}}",
+    "reactivateFor": "恢复 {{email}}",
+    "suspendedToast": "已停用：{{n}}",
+    "reactivatedToast": "已恢复：{{n}}"
   },
   "superadmins": {
     "title": "安装管理员",
@@ -313,7 +332,7 @@
       "sessions": "该密钥将从存储中移除。接收它的会话会继续运行，但在你重新创建之前无法恢复，引用它的模板也无法启动。"
     },
     "sessionCaption": "会话可以作为环境变量接收的密钥。名称以 env/ 开头。值不会再次显示。",
-    "credentialCaption": "会话可通过引擎的助手使用的托管凭据（Business）。名称以 credential/ 开头。值永远不会再次显示。",
+    "credentialCaption": "会话可通过引擎的助手使用的托管凭据（Olivares AI Business）。名称以 credential/ 开头。值永远不会再次显示。",
     "colValue": "值",
     "colChanged": "上次更改",
     "colReference": "引用",
@@ -935,7 +954,7 @@
   "activation": {
     "title": "Business 激活",
     "caption": "启用您的版本包含的模块。具有安全默认值的控制项将被激活；需要密钥或策略审查的控制项将被暂存，供您填写并提升。",
-    "unavailable": "激活功能在 Business 版中可用。",
+    "unavailable": "激活功能在 Olivares AI Business 版中可用。",
     "enablePreset": "启用预设",
     "addon": "模块",
     "state": "状态",

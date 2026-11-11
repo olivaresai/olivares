@@ -309,6 +309,7 @@ function DetailBody({
           </KvList>
         ) : (
           <EmptyState
+            size="panel"
             title={t('detail.noConfig')}
             description={t('detail.noConfigHint')}
           />

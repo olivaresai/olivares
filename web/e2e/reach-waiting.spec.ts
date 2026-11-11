@@ -125,8 +125,7 @@ test.describe('Reach real use', () => {
       name: 'Main navigation',
       exact: true,
     })
-    await nav.getByRole('button', { name: 'More', exact: true }).click()
-    // Access map and Reach are pages of Audit (0.7).
+    // Access map and Reach are pages of Audit (0.7), listed in the navigation.
     await nav.getByRole('link', { name: 'Audit', exact: true }).click()
     await page.getByRole('link', { name: 'Reach', exact: true }).click()
     await page.waitForURL((url) => url.pathname === '/reach')

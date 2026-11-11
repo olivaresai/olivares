@@ -18,6 +18,7 @@ import { mergeSessions } from './provenance'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
 import type { SessionResolution } from './use-session-resolution'
+import { useTerminalDrawer } from './terminal-drawer'
 import { WorkSurface } from './work-surface'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import i18n from '@/lib/i18n'
@@ -105,7 +106,7 @@ function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
     <WorkSurface
       sessions={sessions}
       loading={false}
-      address={{ address: 'live:lr-a', pane: 'rail', evidence: 'checks' }}
+      address={{ address: 'live:lr-a', pane: 'narrative', evidence: 'checks' }}
       resolution={resolution}
       pinned={new Set()}
       onTogglePin={vi.fn()}
@@ -119,12 +120,19 @@ function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
   return { onPane, onOpen, unmount: rendered.unmount }
 }
 
+function renderList(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
+  return renderSurface({
+    address: { address: 'live:lr-a', pane: 'rail', evidence: 'checks' },
+    ...over,
+  })
+}
+
 /** The surface rendered once, then again with other props, as a navigation does. */
 function renderIntelSurface(first: Partial<Parameters<typeof WorkSurface>[0]>) {
   const base: Parameters<typeof WorkSurface>[0] = {
     sessions,
     loading: false,
-    address: { address: 'live:lr-a', pane: 'rail', evidence: 'checks' },
+    address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
     resolution,
     pinned: new Set(),
     onTogglePin: vi.fn(),
@@ -203,7 +211,7 @@ describe('WorkSurface', () => {
     'activates a focused Open beside button with %s without opening a primary session',
     async (key) => {
       const onOpenBeside = vi.fn()
-      const { onOpen } = renderSurface({ onOpenBeside })
+      const { onOpen } = renderList({ onOpenBeside })
       screen.getAllByLabelText('Open beside')[0].focus()
       await userEvent.keyboard(key)
       expect(onOpenBeside).toHaveBeenCalledWith(sessions[1])
@@ -267,7 +275,7 @@ describe('WorkSurface', () => {
 
   it('keeps the pointer Open beside button out of the listbox tree and the tab order', async () => {
     const onOpenBeside = vi.fn()
-    renderSurface({ onOpenBeside })
+    renderList({ onOpenBeside })
     // Only the OTHER row offers it; the selected row is already the primary session.
     const buttons = screen.getAllByLabelText('Open beside')
     expect(buttons).toHaveLength(1)
@@ -284,7 +292,7 @@ describe('WorkSurface', () => {
 
   it('opens the focused rail row beside with the declared command, and nothing else', () => {
     const onOpenBeside = vi.fn()
-    renderSurface({ onOpenBeside })
+    renderList({ onOpenBeside })
     const [selected, other] = screen.getAllByRole('option')
     other.focus()
     fireEvent.keyDown(other, { key: 'o', altKey: true, shiftKey: true })
@@ -387,12 +395,12 @@ describe('WorkSurface', () => {
     })
     expect(screen.getByTestId('work-composer')).toBeInTheDocument()
   })
-  it('mounts all three panes on a desktop whatever is in front', async () => {
+  it('mounts the thread and Details without a second work list', async () => {
     stubViewportWidth(1440)
     renderSurface()
-    await screen.findByTestId('work-rail')
-    for (const id of ['rail', 'narrative', 'context'])
-      expect(pane(id)).not.toBeNull()
+    await screen.findByTestId('session-narrative')
+    expect(pane('rail')).toBeNull()
+    for (const id of ['narrative', 'context']) expect(pane(id)).not.toBeNull()
   })
 
   it('keeps the conversation in front while Details sits beside it from 1120 px', async () => {
@@ -417,7 +425,7 @@ describe('WorkSurface', () => {
     // One Details at a time: the grid holds no second copy of it.
     expect(document.querySelectorAll('#work-pane-context')).toHaveLength(1)
     expect(sheet).toHaveAttribute('id', 'work-pane-context')
-    expect(pane('rail')?.className).toContain('hidden min-[761px]:flex')
+    expect(pane('rail')).toBeNull()
     expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
     await user.click(within(sheet).getByRole('button', { name: 'Close' }))
     expect(onPane).toHaveBeenCalledWith('narrative')
@@ -438,20 +446,20 @@ describe('WorkSurface', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows the list and the thread side by side from 761 px, and one at a time below it', async () => {
+  it('uses the thread destination without a second list', async () => {
     renderSurface({
       address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
     })
-    await screen.findByTestId('work-rail')
+    await screen.findByTestId('session-narrative')
     // The thread is in front: the list shows beside it from 761 px up and is hidden below.
-    expect(pane('rail')?.className).toContain('hidden min-[761px]:flex')
+    expect(pane('rail')).toBeNull()
     expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
   })
 
-  it('lays the list out at 292 px and Details at 304 px, 264 and 280 px at 1350 px and below, with no card chrome', async () => {
+  it('gives the conversation the list column width, keeping Details at its chosen size', async () => {
     stubViewportWidth(1440)
     renderSurface()
-    await screen.findByTestId('work-rail')
+    await screen.findByTestId('session-narrative')
     const grid = document.querySelector('[data-context]') as HTMLElement
     const cls = grid.className
     expect(cls).toContain('[--list-w:292px]')
@@ -459,20 +467,20 @@ describe('WorkSurface', () => {
     expect(cls).toContain('[--ctx-w:304px]')
     expect(cls).toContain('max-[1350px]:[--ctx-w:280px]')
     expect(cls.split(/\s+/).filter((c) => c.includes('grid-cols-'))).toEqual([
-      'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+      'grid-cols-[minmax(0,1fr)_min(var(--ctx-w),35%)]',
     ])
-    for (const id of ['rail', 'narrative', 'context'])
+    for (const id of ['narrative', 'context'])
       expect(pane(id)?.className).not.toMatch(
         /rounded-lg|border-border|bg-surface/,
       )
-    expect(pane('rail')?.className).toContain('min-[761px]:border-r')
+    expect(pane('rail')).toBeNull()
   })
 
-  it('puts the list header above the rows, inside the list column', async () => {
-    renderSurface({ listHeader: <div data-testid="head">Sessions head</div> })
+  it('puts the page header above the rows, as the first thing on the surface', async () => {
+    renderList({ listHeader: <div data-testid="head">Sessions head</div> })
     const rail = await screen.findByTestId('work-rail')
     const head = screen.getByTestId('head')
-    expect(pane('rail')).toContainElement(head)
+    expect(screen.getByTestId('work-surface').firstElementChild).toBe(head)
     expect(
       head.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
@@ -681,7 +689,7 @@ describe('WorkSurface', () => {
       const wide = renderSurface()
       // 264 px list + 576 px conversation + 280 px Details at 1120 px.
       expect(grid().className).toContain(
-        'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+        'grid-cols-[minmax(0,1fr)_min(var(--ctx-w),35%)]',
       )
       expect(pane('context')).not.toBeNull()
       wide.unmount()
@@ -712,7 +720,7 @@ describe('WorkSurface', () => {
   })
 
   it('passes the open session to the rail as the selected row', async () => {
-    renderSurface()
+    renderList()
     const rail = await screen.findByTestId('work-rail')
     const selected = rail.querySelector('[aria-selected="true"]')
     expect(selected).toHaveAttribute('data-address', 'live:lr-a')
@@ -763,25 +771,16 @@ describe('WorkSurface', () => {
   // 26.10.1 review, measured again before this fix: an empty estate painted one
   // empty state per pane ("No sessions yet", "Select a session") with a New session in
   // each, under the header's own. Nothing to list is one fact: one empty state, one action.
-  it('an empty estate is the three regions, with what it is given in the work region', async () => {
+  it('a new session uses the work region without empty list and Details columns', () => {
     renderSurface({
       sessions: [],
       address: { address: '', pane: 'rail', evidence: 'checks' },
       resolution: { ...resolution, target: null, live: undefined },
       emptyAction: <textarea aria-label="First message" />,
-      listHeader: <div data-testid="head">Sessions head</div>,
     })
-    expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
-    expect(
-      within(pane('narrative') as HTMLElement).getByRole('textbox', {
-        name: 'First message',
-      }),
-    ).toBeInTheDocument()
-    expect(pane('context')).toHaveTextContent(
-      'the files it changes appear here as it works',
-    )
-    expect(screen.getByTestId('head')).toBeInTheDocument()
-    expect(screen.queryByText('Select a session')).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'First message' })).toBeVisible()
+    expect(pane('rail')).toBeNull()
+    expect(pane('context')).toBeNull()
   })
 
   it('an empty estate for a person who cannot start one is one empty state, not one per pane', async () => {
@@ -807,9 +806,8 @@ describe('WorkSurface', () => {
       resolution: { ...resolution, target: null, live: undefined },
       emptyAction: <button type="button">New session</button>,
     })
-    expect(
-      within(pane('narrative') as HTMLElement).getByText('Select a session'),
-    ).toBeInTheDocument()
+    expect(screen.getByTestId('work-rail')).toBeInTheDocument()
+    expect(pane('narrative')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(screen.queryByTestId('work-composer')).toBeNull()
   })
@@ -958,17 +956,17 @@ describe('WorkSurface — the filter field', () => {
   )
 
   it('appears under the header only when there are more than 6 sessions', async () => {
-    renderSurface({ sessions: many })
+    renderList({ sessions: many })
     expect(await screen.findByTestId('rail-filter')).toBeInTheDocument()
     cleanup()
-    renderSurface({ sessions: many.slice(0, 6) })
+    renderList({ sessions: many.slice(0, 6) })
     await screen.findByTestId('work-rail')
     expect(screen.queryByTestId('rail-filter')).toBeNull()
   })
 
   it('narrows the rows by what they show, with no request', async () => {
     const user = userEvent.setup()
-    renderSurface({ sessions: many })
+    renderList({ sessions: many })
     await user.type(await screen.findByTestId('rail-filter'), 'parser')
     const rows = within(screen.getByTestId('work-rail')).getAllByTestId(
       'rail-row',
@@ -979,7 +977,7 @@ describe('WorkSurface — the filter field', () => {
 
   it('says nothing matches, once, instead of an empty list', async () => {
     const user = userEvent.setup()
-    renderSurface({ sessions: many })
+    renderList({ sessions: many })
     await user.type(await screen.findByTestId('rail-filter'), 'zzzz')
     expect(await screen.findByTestId('rail-no-match')).toHaveTextContent(
       'No session matches.',
@@ -1046,7 +1044,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
   const estate = mergeSessions([], [RUN, ARCHIVED])
 
   it('gives every row its actions menu on a right-click', async () => {
-    renderSurface({ sessions: estate })
+    renderList({ sessions: estate })
     const row = screen
       .getAllByTestId('rail-row')
       .find((el) => el.textContent?.includes('nightly'))!
@@ -1061,7 +1059,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
     // The same fold as Snoozed: the rows stay where they were, and the archived
     // ones join the end of the list while the section is open.
     const user = userEvent.setup()
-    renderSurface({ sessions: estate })
+    renderList({ sessions: estate })
     const names = () =>
       screen.getAllByTestId('rail-row-name').map((el) => el.textContent)
     expect(names()).toEqual(['nightly'])
@@ -1078,7 +1076,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
   })
 
   it('draws only the Archived toggle, and never "no sessions", when every session is archived', () => {
-    renderSurface({ sessions: mergeSessions([], [ARCHIVED]) })
+    renderList({ sessions: mergeSessions([], [ARCHIVED]) })
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(screen.queryByText('No sessions yet')).toBeNull()
     expect(screen.getByRole('button', { name: 'Archived 1' })).toBeVisible()
@@ -1086,7 +1084,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
 
   it('gives focus back to the row once a dialog opened from its menu closes', async () => {
     const user = userEvent.setup()
-    renderSurface({ sessions: estate })
+    renderList({ sessions: estate })
     const row = screen
       .getAllByTestId('rail-row')
       .find((el) => el.textContent?.includes('nightly'))!
@@ -1104,7 +1102,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
   })
 
   it('draws no Archived toggle while nothing is archived', () => {
-    renderSurface({ sessions: mergeSessions([], [RUN]) })
+    renderList({ sessions: mergeSessions([], [RUN]) })
     expect(screen.queryByRole('button', { name: /^Archived/ })).toBeNull()
   })
 })
@@ -1121,7 +1119,7 @@ it('opens session panels and composer pickers with the documented shortcuts', as
   const managed = live({ attribution: 'managed' })
   const session = mergeSessions([managed], [run])[0]
   const onPanel = vi.fn()
-  renderSurface({
+  renderList({
     address: { address: session.key, pane: 'narrative', evidence: 'checks' },
     resolution: { ...resolution, session, live: managed, runs: [run] },
     onPanel,
@@ -1129,13 +1127,21 @@ it('opens session panels and composer pickers with the documented shortcuts', as
   const field = await screen.findByTestId('launcher-input')
   field.focus()
   for (const [key, shiftKey, panel] of [
-    ['j', false, 'terminal'],
     ['d', false, 'changes'],
     ['j', true, 'preview'],
   ] as const) {
     fireEvent.keyDown(field, { key, ctrlKey: true, shiftKey })
     expect(onPanel).toHaveBeenLastCalledWith(panel)
   }
+  // The terminal is the drawer under the conversation, not a tab: the same key opens
+  // and shuts it, and the side pane is left alone.
+  const drawer = () => useTerminalDrawer.getState().open[run.run_ref] ?? false
+  onPanel.mockClear()
+  fireEvent.keyDown(field, { key: 'j', ctrlKey: true })
+  expect(drawer()).toBe(true)
+  fireEvent.keyDown(field, { key: 'j', ctrlKey: true })
+  expect(drawer()).toBe(false)
+  expect(onPanel).not.toHaveBeenCalled()
   const terminal = document.createElement('div')
   terminal.className = 'xterm'
   const terminalInput = document.createElement('textarea')
@@ -1154,7 +1160,8 @@ it('opens session panels and composer pickers with the documented shortcuts', as
     expect(onPanel).not.toHaveBeenCalled()
     expect(eof.defaultPrevented).toBe(false)
     fireEvent.keyDown(terminalInput, { key: 'j', ctrlKey: true })
-    expect(onPanel).toHaveBeenLastCalledWith('terminal')
+    expect(drawer()).toBe(true)
+    expect(onPanel).not.toHaveBeenCalled()
   } finally {
     terminal.remove()
   }

@@ -75,6 +75,7 @@ import { useAuth } from '@/lib/auth/context'
 import { usePendingCommandAction } from '@/features/navigation/command-actions'
 import { ApiError } from '@/lib/api/errors'
 import {
+  reportEditionRefusal,
   useFailedActionReporter,
   usePrivilegedMutation,
 } from '@/lib/hooks/use-privileged-mutation'
@@ -233,7 +234,7 @@ function RoutesTab({
       // ceremonia del de rol, que es lo que este `onError` colapsaba. `isForbidden` es
       // cierto para los DOS (lib/api/errors.ts:59), así que el cierre del diálogo cubre
       // igual las dos negativas, como antes.
-      if (e instanceof ApiError && e.isForbidden) setDeleting(null)
+      if (e instanceof ApiError && e.isForbiddenOrEdition) setDeleting(null)
       report(e)
     },
   })
@@ -850,7 +851,10 @@ function TestSignalPanel() {
         subject_kind: subjectKind,
       }),
     onSuccess: setResult,
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   return (
@@ -1207,6 +1211,7 @@ function DeadLettersTab() {
  *        code=step_up_required           → the ceremony (errors.ts:71-79 says to branch
  *                                          on this BEFORE isForbidden, which is only a status)
  *        anything else 403               → the role boundary, calm and not a failure
+ *   an edition refusal is no box: the reporter says its one line
  *   ---- anything else carries the engine's own message
  */
 type RedeliverFailureKind =
@@ -1354,6 +1359,11 @@ function OutboxList({ canRedeliver }: { canRedeliver: boolean }) {
     setFailure(null)
     redeliver.mutate(row, {
       onError: (err) => {
+        // The reporter says an edition refusal's one line: no box beside it.
+        if (err instanceof ApiError && err.isEditionRefusal) {
+          setConfirming(null)
+          return
+        }
         setFailure({
           destination: row.destination,
           kind: redeliverFailureKind(err),

@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // Each entry exists only while the registered process waits on the existing
@@ -61,14 +62,41 @@ func (m *Module) BeginApprovalWait(ctx context.Context, principal auth.Principal
 	lr.pendingApprovals = append(lr.pendingApprovals, wait)
 	lr.mu.Unlock()
 	m.pushAttention(tenant, rec, pushApproval)
+	liveRef := rec.String(colRunLiveRef)
+	m.publishRunChanged(ctx, tenant, lr.runRef, liveRef)
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			lr.mu.Lock()
-			defer lr.mu.Unlock()
 			lr.pendingApprovals = slices.DeleteFunc(lr.pendingApprovals, func(candidate *runApprovalWait) bool { return candidate == wait })
+			lr.mu.Unlock()
+			// The wait may end after its request's context was cancelled.
+			m.publishRunChanged(context.WithoutCancel(ctx), tenant, lr.runRef, liveRef)
 		})
 	}, nil
+}
+
+// publishRunChanged puts the run's managed live row on the live stream, so a console
+// watching it reads the run again now instead of on its next poll. A run whose managed
+// row is not proven yet has none to announce; the console's poll covers it.
+func (m *Module) publishRunChanged(ctx context.Context, tenant model.TenantID, runRef, liveRef string) {
+	id, ok := parseLiveRef(liveRef)
+	if !ok {
+		return
+	}
+	var snap liveSnapshot
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
+		live, err := findLiveByID(ctx, sc, id)
+		if err != nil {
+			return err
+		}
+		snap = m.snapshot(live, tenant)
+		return nil
+	}); err != nil {
+		m.warnf("sessions: the run's approval wait could not be announced on the live stream; the console reads it on its next poll", "run_ref", runRef, "cause", redactErr(err))
+		return
+	}
+	m.broker.publish(snap)
 }
 
 // currentLiveOf is the supervised handle of a running row: the same launch, session and

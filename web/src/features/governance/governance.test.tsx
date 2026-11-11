@@ -80,6 +80,7 @@ vi.mock('./api', async (importOriginal) => {
 
 import GovernanceView from './governance-view'
 import { PolicyEditorDialog } from './policy-editor'
+import { NewRequestDialog } from './new-request-dialog'
 import { IdentitiesView } from './identities-view'
 import { GroupMembersSheet } from './group-members'
 
@@ -344,6 +345,27 @@ describe('Approve after the request is no longer pending', () => {
   })
 })
 
+describe('NewRequestDialog — durations in human units', () => {
+  it('sends the 4-hour expiry chosen from the menu, in seconds', async () => {
+    api.createApproval.mockResolvedValue({ id: 'a1' })
+    wrap(<NewRequestDialog open onOpenChange={() => {}} />)
+    await userEvent.type(screen.getByLabelText(/^action/i), 'deploy.prod')
+    await userEvent.click(screen.getByRole('combobox', { name: 'Expires in' }))
+    await userEvent.click(screen.getByRole('option', { name: '4 hours' }))
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Submit request' }),
+    )
+    await waitFor(() =>
+      expect(api.createApproval).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'deploy.prod',
+          expires_in_seconds: 14400,
+        }),
+      ),
+    )
+  })
+})
+
 describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
   it('shows the audit notice and offers NO secret-value input; gates on a name', async () => {
     wrap(<PolicyEditorDialog open onOpenChange={() => {}} />)
@@ -522,10 +544,10 @@ describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
   // The form has no risk-tier field, but it keeps the tier of a stored policy and asks
   // for an approval count. Saving a tier or a count other than the action's default is
   // how Community refuses from this form (501 business_required). The dialog says why,
-  // in a line that stays.
-  it('names the Business limit in the dialog when the server refuses a tier or an approval count', async () => {
+  // in the one edition line, calm, naming the edition whole; the line stays.
+  it('names the edition in the dialog when the server refuses a tier or an approval count', async () => {
     const limit =
-      /an approval count other than the action's default needs business/i
+      "Changing an action's risk tier or approval count is part of Olivares AI Business."
     api.updatePolicy.mockRejectedValue(
       new ApiError(
         501,
@@ -541,15 +563,20 @@ describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
       spec: { risk_tier: 'high', match: { action: 'deploy.apply' } },
     }
     wrap(<PolicyEditorDialog open onOpenChange={() => {}} policy={policy} />)
-    expect(screen.queryByText(limit)).toBeNull()
+    expect(screen.queryByText(limit, { exact: false })).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(limit)
+    const line = await screen.findByText(limit, { exact: false })
+    expect(line.closest('[role="status"]')).toHaveTextContent(
+      'What is already stored stays readable and exportable.',
+    )
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(document.body).not.toHaveTextContent(/business_required|\b501\b/)
     expect(toast.error).not.toHaveBeenCalled()
     // A later save that works clears the line.
     api.updatePolicy.mockResolvedValue(policy)
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
-    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(limit, { exact: false })).toBeNull()
   })
 
   it('keeps the generic error toast for any other refusal', async () => {
@@ -599,14 +626,6 @@ describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
       )
       expect(create).toBeDisabled()
     }
-    const expires = screen.getByLabelText(/^expires in/i)
-    await userEvent.clear(expires)
-    await userEvent.type(expires, '31536001')
-    expect(
-      screen.getByText('Enter a whole number from 0 to 31536000.'),
-    ).toBeInTheDocument()
-    expect(create).toBeDisabled()
-    await userEvent.clear(expires)
     await userEvent.clear(required)
     await userEvent.type(required, '2')
     expect(screen.queryByRole('alert')).toBeNull()

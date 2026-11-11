@@ -10,7 +10,7 @@
 // Every fact is the approval queue's own (features/governance/approval-preview.tsx) and
 // every decision goes through the queue's own mutation: this is another place to decide,
 // not another way to.
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Loader2, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
@@ -245,6 +245,12 @@ function ApprovalBody({
                 ? tg('approvals.approving')
                 : tg('approvals.approveOnce')}
             </Button>
+            {!approval.session_scope_allowed &&
+            (approval.policy_ref || approval.subject_kind === 'claude.tool') ? (
+              <p className="text-caption text-text-2">
+                {tg('approvals.sessionPolicy')}
+              </p>
+            ) : null}
             {approval.session_scope_allowed && (
               <Button
                 variant="secondary"
@@ -299,5 +305,88 @@ function ApprovalBody({
         </p>
       )}
     </div>
+  )
+}
+
+/** The original decisions are the allowance list; revocation keeps their audit history. */
+export function SessionAllowances({
+  sessionRef,
+  active,
+}: {
+  sessionRef?: string
+  active: boolean
+}) {
+  const { activeTenant, can } = useAuth()
+  const { t } = useTranslation('governance')
+  const client = useQueryClient()
+  const query = useQuery({
+    queryKey: [
+      ...governanceKeys.approvals(activeTenant),
+      'session-allowances',
+      sessionRef,
+    ],
+    enabled: active && !!sessionRef && can(APPROVAL_READ),
+    refetchInterval: 12_000,
+    queryFn: async () => {
+      const allowances: ApprovalDTO[] = []
+      let cursor: string | undefined
+      do {
+        const page = await governanceApi.listApprovals({
+          status: 'approved',
+          cursor,
+        })
+        for (const approval of page.items) {
+          if (
+            approval.session_ref !== sessionRef ||
+            !approval.session_scope_allowed
+          )
+            continue
+          const decisions = await governanceApi.listDecisions(approval.id)
+          if (
+            decisions.items.length &&
+            decisions.items.every(
+              (d) => d.decision === 'approve' && d.scope === 'session',
+            )
+          )
+            allowances.push(approval)
+        }
+        cursor = page.has_more ? page.cursor : undefined
+      } while (cursor)
+      return allowances
+    },
+  })
+  const revoke = useMutation({
+    mutationFn: (id: string) => governanceApi.cancelApproval(id),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: governanceKeys.all(activeTenant) }),
+  })
+  if (!active || !sessionRef || !can(APPROVAL_READ)) return null
+  if (query.isError) return <p role="alert">{t('approvals.allowancesError')}</p>
+  if (!query.data?.length) return null
+  return (
+    <section
+      aria-label={t('approvals.allowances')}
+      className="my-3 flex flex-col gap-2"
+    >
+      <h3 className="text-caption font-medium">{t('approvals.allowances')}</h3>
+      {query.data.map((approval) => (
+        <div key={approval.id} className="flex min-w-0 items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <ApprovalWhatRuns approval={approval} />
+          </div>
+          {can('governance:approval:admin') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={revoke.isPending}
+              onClick={() => revoke.mutate(approval.id)}
+            >
+              {t('approvals.revokeAllowance')}
+            </Button>
+          )}
+        </div>
+      ))}
+      {revoke.isError && <p role="alert">{t('approvals.allowancesError')}</p>}
+    </section>
   )
 }

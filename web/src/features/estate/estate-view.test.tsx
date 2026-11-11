@@ -162,6 +162,14 @@ describe('estate list and inspector', () => {
     expect(await screen.findByRole('dialog')).not.toHaveTextContent(
       'Every other launch choice is under Advanced options.',
     )
+    await userEvent.click(
+      await screen.findByRole('combobox', { name: 'Folder' }),
+    )
+    await userEvent.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
     await userEvent.click(await screen.findByRole('button', { name: 'Start' }))
     expect(wire.start).toHaveBeenCalledWith(
       {

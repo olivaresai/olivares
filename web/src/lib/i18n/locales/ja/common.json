@@ -1,9 +1,22 @@
 {
   "edition": {
     "viewPolicy": "ポリシーを表示",
-    "editingRequiresBusiness": "カスタムポリシー、ロール、権限の編集には Business が必要です。",
+    "editingRequiresBusiness": "カスタムポリシー、ロール、権限の編集には Olivares AI Business が必要です。",
     "disablePolicy": "ポリシーを無効化",
-    "disablePolicyDescription": "作成したポリシーは適用されなくなります。履歴と他の適用中のポリシーは保持されます。"
+    "disablePolicyDescription": "作成したポリシーは適用されなくなります。履歴と他の適用中のポリシーは保持されます。",
+    "note": {
+      "line": "{{capability}} は {{edition}} に含まれます。<0>設定 > エディション</0> でライセンスを追加するか、<1>olivares.ai/pricing</1> をご覧ください。",
+      "lineUnnamed": "この機能は {{edition}} に含まれます。<0>設定 > エディション</0> でライセンスを追加するか、<1>olivares.ai/pricing</1> をご覧ください。",
+      "lineAsk": "{{capability}} は {{edition}} に含まれます。管理者にお問い合わせください。",
+      "lineUnnamedAsk": "この機能は {{edition}} に含まれます。管理者にお問い合わせください。",
+      "readsBelow": "保存済みのデータは引き続き閲覧とエクスポートができます。",
+      "tag": "{{edition}} に含まれます"
+    },
+    "capabilities": {
+      "skills": "スキル",
+      "sso": "シングルサインオン",
+      "approvalTiers": "アクションのリスク階層や承認数の変更"
+    }
   },
   "errors": {
     "generic": "エラーが発生しました"
@@ -113,14 +126,6 @@
     "peopleHint": "名前を入力してください。",
     "ask": "Olivaresに質問…"
   },
-  "hintBar": {
-    "move": "移動",
-    "open": "開く",
-    "approve": "承認",
-    "deny": "拒否",
-    "launcher": "ランチャー",
-    "command": "コマンド"
-  },
   "permissionWords": {
     "read": "読み取り権限",
     "write": "書き込み権限",
@@ -218,6 +223,7 @@
   "notifications": {
     "title": "最近のアクティビティ",
     "empty": "最近のアクティビティはありません。",
+    "auditOnly": "最近のアクティビティは、監査台帳を閲覧できるユーザーに表示されます。",
     "viewAll": "監査台帳ですべて表示",
     "events": {
       "auditCheckpoint": "監査チェックポイントを作成しました",
@@ -323,7 +329,8 @@
       "launcher": {
         "focus": "ランチャーへ移動",
         "start": "セッションを開始",
-        "startBackground": "開始してこの画面に残る"
+        "startBackground": "開始してこの画面に残る",
+        "stash": "下書きを退避、または戻す"
       },
       "surface": {
         "openBeside": "隣に開く",
@@ -372,7 +379,9 @@
       },
       "ask": {
         "open": "Olivaresに質問"
-      }
+      },
+      "shell.sidebar": "サイドバーを切り替え",
+      "shell.panel": "サイドパネルを切り替え"
     },
     "when": {
       "railFocused": "セッションレール内",

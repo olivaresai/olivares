@@ -209,9 +209,15 @@ describe('the shipped table', () => {
     // A rule with no `when` fires wherever the shell handler runs. Every one of them
     // must therefore be a chord, or a key the shell only reads when the operator is NOT
     // typing (`/` and `?`), which `GlobalShortcuts` enforces with `isTypingTarget`.
-    // (`Mod+b` folded the sidebar rail until the top bar replaced the sidebar,.)
+    // `Mod+b` folds the sidebar and `Mod+Alt+b` the session details: chords, never typed.
     const shellWide = KEYBINDINGS.filter((r) => r.when === undefined)
-    expect(shellWide.map((r) => r.keys).sort()).toEqual(['/', '?', 'Mod+k'])
+    expect(shellWide.map((r) => r.keys).sort()).toEqual([
+      '/',
+      '?',
+      'Mod+Alt+b',
+      'Mod+b',
+      'Mod+k',
+    ])
     // The bare keys among them stay exactly two, and both are guarded by isTypingTarget.
     expect(
       shellWide

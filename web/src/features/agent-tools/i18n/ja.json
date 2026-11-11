@@ -158,7 +158,11 @@
     "default": "既定のサインイン",
     "readFailed": "プロファイルを読み込めませんでした。",
     "truncated": "表示されていないプロファイルがあります。",
-    "retry": "再試行"
+    "retry": "再試行",
+    "turnOff": "{{name}}をオフにする",
+    "turnOn": "{{name}}をオンにする",
+    "switchedOn": "{{name}}をオンにしました",
+    "switchedOff": "{{name}}をオフにしました"
   },
   "tool": {
     "menu": "{{name}} のオプション",
@@ -260,5 +264,30 @@
     "accounts": "アカウント",
     "allAccounts": "すべてのアカウント: 詳細、ラベル、バインディング",
     "noAccess": "あなたのロールでは、この組織のアカウントと APIキーを読み取れません。"
+  },
+  "runtime": {
+    "title": "ランタイム",
+    "autoCompact": "自動コンパクトのしきい値",
+    "autoCompactHint": "100,000〜1,000,000 トークンでコンパクトします。空欄にすると Claude の既定値を使います。",
+    "autoCompactPlaceholder": "例: 300000",
+    "autoCompactInvalid": "100000〜1000000 の整数を入力するか、空欄にしてください。",
+    "saved": "ランタイムを保存しました。新しいセッションから使われます。"
+  },
+  "models": {
+    "title": "モデル",
+    "note": "このリストはあなただけに表示されます。非表示のモデルは選択肢から外れますが、ツールの既定と入力したモデルは引き続き使えます。",
+    "filter": "モデルを絞り込む",
+    "disableAll": "すべて非表示",
+    "enableAll": "すべて表示",
+    "addCustom": "カスタムモデルを追加",
+    "customPlaceholder": "モデル ID（例: claude-opus-5-5）",
+    "customInvalid": "モデル ID に空白は使えず、200 文字までです。",
+    "add": "追加",
+    "fast": "高速モード",
+    "up": "{{name}} を上へ",
+    "down": "{{name}} を下へ",
+    "use": "{{name}} を表示",
+    "removeCustom": "{{name}} を削除",
+    "empty": "このツールはモデルを報告しません。使うモデルを追加してください。"
   }
 }

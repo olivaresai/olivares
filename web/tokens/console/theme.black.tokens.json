@@ -1,5 +1,5 @@
 {
-  "$description": "Console BLACK theme: the dark theme on true black, for OLED screens and dark rooms. Built on top of theme.dark.tokens.json (tokens/build.mjs loads the two, this file second) and emitted to the .dark.black block of src/styles/tokens.css, so every dark style still applies and only these values change: the sheet is #000, surfaces rise one step at a time, hairlines stay faint, text is #ededed and muted text #8a8a8a, and the soft fills are darkened so every text token still holds at least 4.5:1 on them. The brand orange and the status colours are the dark theme's. Pinned by src/styles/tokens.test.ts with the same 250 required pairs as the other themes.",
+  "$description": "Console BLACK theme: the dark theme on true black, for OLED screens and dark rooms. Built on top of theme.dark.tokens.json (tokens/build.mjs loads the two, this file second) and emitted to the .dark.black block of src/styles/tokens.css, so every dark style still applies and only these values change: the sheet is #000, surfaces rise one step at a time, the well is black and the pane near black, the pressed layer is 10%, hairlines stay faint, text is #ededed and muted text #8a8a8a, and the soft fills are darkened so every text token still holds at least 4.5:1 on them. The brand orange and the status colours are the dark theme's. Pinned by src/styles/tokens.test.ts with the same 272 required pairs as the other themes.",
   "palette": {
     "$type": "color",
     "frame": {
@@ -33,6 +33,22 @@
     "scrim": {
       "$value": "rgba(0, 0, 0, 0.7)",
       "$description": "Behind a dialog or sheet."
+    },
+    "well": {
+      "$value": "#000000",
+      "$description": "The recessed surface: black, as the sheet."
+    },
+    "pane": {
+      "$value": "#050505",
+      "$description": "A secondary pane: half a step above the sheet."
+    },
+    "pressed": {
+      "$value": "rgba(255, 255, 255, 0.1)",
+      "$description": "The pressed layer. Not the dark theme's 16%: under it the muted text #8a8a8a falls to 3.76:1 on a panel row; 10% keeps 4.58:1."
+    },
+    "on-inverse": {
+      "$value": "#111111",
+      "$description": "Text on the toast's light surface."
     },
     "text": {
       "$value": "#ededed",
@@ -73,6 +89,13 @@
     "diff-del": {
       "$value": "#1d0e10",
       "$description": "A removed line in a diff."
+    }
+  },
+  "depth": {
+    "shadow-well": {
+      "$type": "shadow",
+      "$value": "inset 0 0 0 1px rgba(255, 255, 255, 0.1)",
+      "$description": "The inner edge of a well: a faint light hairline, since a dark shadow does not show on black."
     }
   },
   "roles": {

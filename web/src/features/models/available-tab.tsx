@@ -61,7 +61,9 @@ type SourceName = 'tools' | 'ollama' | 'availability' | 'runs'
 function isRefusal(error: unknown): boolean {
   return (
     error instanceof ApiError &&
-    (error.isUnauthenticated || error.isForbidden || error.isStepUpRequired)
+    (error.isUnauthenticated ||
+      error.isForbiddenOrEdition ||
+      error.isStepUpRequired)
   )
 }
 
@@ -174,7 +176,7 @@ function useAvailable() {
       } catch (error) {
         if (
           error instanceof ApiError &&
-          error.isForbidden &&
+          error.isForbiddenOrEdition &&
           !error.isStepUpRequired
         )
           return null
@@ -457,7 +459,7 @@ function ModelCell({ row }: { row: AvailableRow }) {
         </span>
         <Link
           to={'/agent-tools' as never}
-          className="text-accent-text underline underline-offset-2"
+          className="text-foreground underline underline-offset-2"
         >
           {t('available.openAiTools')}
         </Link>
@@ -599,7 +601,7 @@ function ModelRow({
                         }),
                       } as never
                     }
-                    className="text-accent-text underline underline-offset-2"
+                    className="text-foreground underline underline-offset-2"
                   >
                     {run.name || run.run_ref}
                   </Link>

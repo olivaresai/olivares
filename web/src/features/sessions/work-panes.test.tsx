@@ -719,14 +719,7 @@ describe('SessionContextPane — what the tool is doing comes first', () => {
       within(screen.getByRole('radiogroup', { name: 'Panels' }))
         .getAllByRole('radio')
         .map((r) => r.textContent),
-    ).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-      'Activity',
-    ])
+    ).toEqual(['Changes', 'Files', 'Preview', 'Details', 'Activity'])
     // And the arrow keys follow that order.
     changes.focus()
     await user.keyboard('{ArrowRight}')

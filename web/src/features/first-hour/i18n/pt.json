@@ -84,6 +84,7 @@
     "notReady": "{{tool}} ainda não pode arrancar.",
     "folder": "Pasta",
     "folderHint": "Uma pasta neste servidor.",
+    "folderHintGiven": "O caminho de uma pasta já registada neste servidor. As novas são registadas por um administrador.",
     "folderChoose": "Escolha uma pasta",
     "folderNew": "Uma pasta nova para esta sessão",
     "folderTyped": "Outra pasta…",
@@ -111,6 +112,7 @@
     "credentialsManage": "Gerir credenciais geridas",
     "listUnavailable": "O motor não respondeu à lista de segredos. Por agora não é possível escolher nada.",
     "openTools": "Abrir ferramentas de IA",
+    "askAdmin": "Peça a um administrador que a prepare.",
     "model": "Modelo",
     "providerDefault": "Predefinição ({{model}})",
     "nativeDefault": "Predefinição de {{tool}}",
@@ -123,14 +125,21 @@
     "profileNeedsKey": "Precisa de uma chave",
     "foldersUnreadable": "Não foi possível ler as pastas registadas. Escreva o caminho de uma pasta neste servidor.",
     "folderPermission": "Arranca como {{name}}, a predefinição desta pasta.",
-    "autoAsks": "{{tool}} não tem modo automático: vai perguntar antes de cada ação."
+    "autoAsks": "{{tool}} não tem modo automático: vai perguntar antes de cada ação.",
+    "worktreeCheckout": "Checkout atual",
+    "worktreeNew": "Novo worktree",
+    "worktreeFrom": "Começar em",
+    "worktreeFromHint": "Ramo ou commit (opcional)",
+    "worktreeNewHint": "A sessão trabalha num ramo próprio, numa pasta separada. O checkout fica como está.",
+    "worktreeLegend": "Cópia de trabalho"
   },
   "composer": {
     "toolPill": "Ferramenta e conta: {{value}}",
     "modelPill": "Modelo: {{value}}",
     "effortPill": "Esforço: {{value}}",
     "folderPill": "Pasta: {{value}}",
-    "moreOptions": "Mais opções"
+    "moreOptions": "Mais opções",
+    "worktreePill": "Cópia de trabalho: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Pastas registadas: {{count}} carregadas; existem mais.",

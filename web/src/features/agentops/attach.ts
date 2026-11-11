@@ -49,6 +49,8 @@ export interface UseRunAttachOptions {
   /** Restarts the attempt when session state/transport (or equivalent) changes. */
   sessionKey?: string
   onFrame: (frame: AttachFrame) => void
+  /** Replaceable live text; never advances the replay cursor. */
+  onDelta?: (frame: AttachFrame | null) => void
   /** Opts into the stored conversation on attach at cursor zero: one line a record, given
    * whole once its last line arrived. A later snapshot replaces the earlier one. */
   onHistory?: (lines: string[]) => void
@@ -76,6 +78,7 @@ export function useRunAttach({
   enabled = true,
   sessionKey,
   onFrame,
+  onDelta,
   onHistory,
   onLag,
   onNotice,
@@ -96,10 +99,26 @@ export function useRunAttach({
   }, [])
 
   // Stable callback refs so the stream effect doesn't restart on every render.
-  const cbRef = useRef({ onFrame, onHistory, onLag, onNotice, onEnd, onPage })
+  const cbRef = useRef({
+    onFrame,
+    onDelta,
+    onHistory,
+    onLag,
+    onNotice,
+    onEnd,
+    onPage,
+  })
   useEffect(() => {
-    cbRef.current = { onFrame, onHistory, onLag, onNotice, onEnd, onPage }
-  }, [onFrame, onHistory, onLag, onNotice, onEnd, onPage])
+    cbRef.current = {
+      onFrame,
+      onDelta,
+      onHistory,
+      onLag,
+      onNotice,
+      onEnd,
+      onPage,
+    }
+  }, [onFrame, onDelta, onHistory, onLag, onNotice, onEnd, onPage])
 
   // Cursor owner is compared privately; the bearer is never placed in React
   // state, a key, or a log. credentialGeneration is the non-secret counter.
@@ -127,6 +146,7 @@ export function useRunAttach({
     let cancelled = false
     let attempt = 0
     let endReceived = false
+    cbRef.current.onDelta?.(null)
     let unavailable: AttachIOUnavailable | null = null
     // The stored conversation comes as one history event per record, before every other
     // event of the attempt: the view folds it once, not once per record.
@@ -152,6 +172,16 @@ export function useRunAttach({
           }
           break
         }
+        case 'delta': {
+          try {
+            const f = JSON.parse(msg.data) as AttachFrame
+            if (f.stream === 'stdout' && typeof f.line === 'string')
+              cb.onDelta?.(f)
+          } catch {
+            /* A lost preview is repaired by the final output frame. */
+          }
+          break
+        }
         case 'output': {
           let f: AttachFrame
           try {
@@ -162,6 +192,7 @@ export function useRunAttach({
           if (typeof f.seq !== 'number' || f.seq < cursorRef.current) return
           cursorRef.current = f.seq + 1
           if (cancelled) return
+          cb.onDelta?.(null)
           cb.onFrame(f)
           break
         }
@@ -201,6 +232,7 @@ export function useRunAttach({
           break
         }
         case 'end': {
+          cb.onDelta?.(null)
           endReceived = true
           if (cancelled) return
           cb.onEnd?.()

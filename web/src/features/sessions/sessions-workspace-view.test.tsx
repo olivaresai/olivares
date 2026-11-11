@@ -145,7 +145,12 @@ import { NewSessionHost } from '@/features/first-hour/new-session-host'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { SessionsWorkspaceView } from './sessions-workspace-view'
 
-vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: vi.fn(),
+  resolveNotice: vi.fn(),
+  noticeSeen: () => false,
+  rememberNotice: vi.fn(),
+}))
 import { notify, resolveNotice } from '@/lib/notify'
 
 // What the page has told: its notices are toasts now, not strips above the work.
@@ -1151,7 +1156,7 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     expect(naked.map((el) => (el.textContent ?? '').slice(0, 40))).toEqual([])
   })
 
-  it('New session puts the start composer in front of the listed sessions until one is opened', async () => {
+  it('New session puts the start composer in the work region until a session is opened', async () => {
     stubViewportWidth(390)
     perms.add('sessions:run:write')
     useNewSessionDialog.setState({ composing: false })
@@ -1165,13 +1170,9 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     expect(
       await screen.findByRole('textbox', { name: 'First message (optional)' }),
     ).toBeVisible()
-    // On a phone the list stays under the composer: nothing hides a row below 761 px.
-    const rows = await screen.findAllByTestId('rail-row')
-    expect(rows[0].closest('.hidden')).toBeNull()
-    // Opening a row ends the start.
-    await user.click(rows[0])
-    await waitFor(() => expect(start()).toBeNull())
-    // Any session address ends it too (a Table row, a link), so Back shows the list.
+    // The start is the work screen: the list's rows are not drawn beside it.
+    expect(screen.queryAllByTestId('rail-row')).toHaveLength(0)
+    // Any session address ends it (a row, a Table row, a link), so Back shows the list.
     await user.click(screen.getByTestId('sessions-new'))
     await screen.findByRole('textbox', { name: 'First message (optional)' })
     act(() => fakeRouter.go('/sessions?session=sess%3Asess-found'))
@@ -1272,7 +1273,8 @@ describe('SessionsWorkspaceView — an empty estate', () => {
   it('an empty list is the work screen: the composer in the work region, New session in the list header', async () => {
     renderEmpty()
     await composer()
-    expect(screen.getAllByText('No sessions yet')).toHaveLength(1)
+    // The composer is the one thing on the screen: no empty state beside it.
+    expect(screen.queryByText('No sessions yet')).toBeNull()
     expect(screen.queryByText('Select a session')).toBeNull()
     expect(screen.queryByText('No session selected')).toBeNull()
     // The list header stays as it is with sessions listed, and carries the one New session.
@@ -1320,45 +1322,60 @@ describe('SessionsWorkspaceView — an empty estate', () => {
     },
   )
 
+  const coldSelection = (width: number, pane: string) => {
+    stubViewportWidth(width)
+    fakeRouter.reset(`/sessions?session=sess%3Asess-found&pane=${pane}`)
+    vi.mocked(sessionsApi.liveOne).mockResolvedValue(observed)
+    vi.mocked(sessionsApi.timeline).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderEmpty()
+  }
+
+  it('keeps one header New session for a cold selection with empty lists on the list', async () => {
+    coldSelection(1024, 'rail')
+    await screen.findByText('No sessions yet')
+    await waitFor(() =>
+      expect(sessionsApi.liveOne).toHaveBeenCalledWith('sess-found'),
+    )
+    const action = screen.getByRole('button', { name: 'New session' })
+    expect(action).toBeEnabled()
+    expect(action.closest('[data-slot="list-header"]')).not.toBeNull()
+    // One, and in the list header: the rail's own empty state carries none.
+    expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(
+      1,
+    )
+    expect(
+      within(screen.getByTestId('work-surface')).getAllByRole('button', {
+        name: 'New session',
+      }),
+    ).toHaveLength(1)
+    expect(
+      within(
+        document.querySelector('[data-slot="empty-state"]') as HTMLElement,
+      ).queryByRole('button', { name: 'New session' }),
+    ).not.toBeInTheDocument()
+  })
+
   it.each([
     [1024, 'narrative'],
-    [1024, 'rail'],
     [1600, 'narrative'],
     // Below 1120 px Details is a modal sheet over the page; from 1120 px it sits beside.
     [1600, 'context'],
   ] as const)(
-    'keeps one header New session for a cold selection with empty lists at %s px, pane %s',
+    'keeps the header New session with the thread in front at %s px, pane %s',
     async (width, pane) => {
-      stubViewportWidth(width)
-      fakeRouter.reset(`/sessions?session=sess%3Asess-found&pane=${pane}`)
-      vi.mocked(sessionsApi.liveOne).mockResolvedValue(observed)
-      vi.mocked(sessionsApi.timeline).mockResolvedValue({
-        items: [],
-        has_more: false,
-      })
-      renderEmpty()
-
-      await screen.findByText('No sessions yet')
+      coldSelection(width, pane)
       await waitFor(() =>
         expect(sessionsApi.liveOne).toHaveBeenCalledWith('sess-found'),
       )
-      const action = screen.getByRole('button', { name: 'New session' })
+      const action = await screen.findByRole('button', { name: 'New session' })
       expect(action).toBeEnabled()
       expect(action.closest('[data-slot="list-header"]')).not.toBeNull()
-      // One, and in the list header: the rail's own empty state carries none.
       expect(
         screen.getAllByRole('button', { name: 'New session' }),
       ).toHaveLength(1)
-      expect(
-        within(
-          document.getElementById('work-pane-rail') as HTMLElement,
-        ).getAllByRole('button', { name: 'New session' }),
-      ).toHaveLength(1)
-      expect(
-        within(
-          document.querySelector('[data-slot="empty-state"]') as HTMLElement,
-        ).queryByRole('button', { name: 'New session' }),
-      ).not.toBeInTheDocument()
     },
   )
 

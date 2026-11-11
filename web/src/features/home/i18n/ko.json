@@ -10,6 +10,19 @@
     "unavailableDescription": "세션 읽기가 응답하지 않았습니다. 위의 에스테이트 수치는 영향을 받지 않습니다.",
     "untitled": "제목 없는 세션"
   },
+  "folders": {
+    "title": "내 폴더",
+    "start": "시작",
+    "startIn": "{{folder}}에서 시작",
+    "canWork": "작업할 수 있음",
+    "readOnly": "읽기 전용",
+    "showAll": "모든 폴더 보기({{total}})",
+    "loading": "폴더를 불러오는 중",
+    "emptyTitle": "아직 폴더가 없습니다",
+    "emptyDescription": "관리자가 폴더 접근 권한을 부여하면 여기에 표시됩니다.",
+    "unavailableTitle": "폴더를 불러오지 못했습니다",
+    "unavailableDescription": "아래 세션에는 영향이 없습니다."
+  },
   "empty": {
     "title": "아직 표시할 것이 없습니다",
     "description": "현재 역할에 어떤 에스테이트 모듈에 대한 읽기 액세스 권한도 없습니다. 개요를 보려면 관리자에게 읽기 권한 부여를 요청하십시오."

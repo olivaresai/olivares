@@ -31,7 +31,7 @@ describe('originLinks', () => {
         key: 'nhiRoster',
         to: '/identity',
         search: { tab: 'inventory' },
-        permission: 'governance:identity:read',
+        permission: 'user:read',
       },
     ])
   })

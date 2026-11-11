@@ -21,7 +21,9 @@ export const VIEWS = [
     },
     helpHref: '/reference/modules/vi-governance',
     icon: Fingerprint,
-    permission: 'governance:identity:read',
+    // The lead page of People: listed for whom the roster answers (GET /v1/members
+    // enforces user:read), never on the machine-identity read every editor holds.
+    permission: 'user:read',
     // ⌘K "Invite people" (console remake 26.10): People with its onboarding dialog open
     // in invite mode. The engine's authority for that write is membership:write.
     commandActions: [{ id: 'invite', permission: 'membership:write' }],

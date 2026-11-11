@@ -6,7 +6,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NetworkError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
 import type { Whoami } from '@/lib/api/types'
 import { useClientSettings } from '@/features/settings/preferences'
@@ -210,7 +210,7 @@ describe('SSO sign-in buttons (server-info sso_providers)', () => {
     ).toBeNull()
   })
 
-  it('shows one button per provider above the password form, then a quiet "or"', () => {
+  it('shows a quiet "or" under the sign-in button, then one button per provider', () => {
     serverInfo.data = {
       ...serverInfo.data,
       sso_providers: [
@@ -226,11 +226,14 @@ describe('SSO sign-in buttons (server-info sso_providers)', () => {
     const kc = screen.getByRole('link', { name: 'Sign in with Keycloak' })
     expect(sso).toHaveAttribute('href', START)
     expect(kc.getAttribute('href')).toContain('idp=kc')
-    expect(screen.getByRole('separator', { name: 'or' })).toBeInTheDocument()
-    // Above the form: the buttons come first in document order.
-    const email = screen.getByLabelText('Email')
+    const or = screen.getByRole('separator', { name: 'or' })
+    // Under the form: the filled button, then «or», then the other ways in.
+    const submit = screen.getByRole('button', { name: 'Sign in' })
     expect(
-      kc.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING,
+      submit.compareDocumentPosition(or) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      or.compareDocumentPosition(sso) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
   })
 
@@ -263,6 +266,67 @@ describe('SSO sign-in buttons (server-info sso_providers)', () => {
     renderLogin()
     expect(screen.queryByRole('link', { name: /sign in with/i })).toBeNull()
     expect(screen.queryByRole('separator', { name: 'or' })).toBeNull()
+  })
+})
+
+// The page as drawn: the lockup, then ONE sheet holding the title, the form,
+// the one filled button and the quieter ways in; the status link sits under it.
+describe('the sign-in page as drawn', () => {
+  const sheetOf = (node: Element) => node.closest('[data-slot="auth-sheet"]')
+
+  it('holds the one h1 and the form in one sheet', () => {
+    renderLogin()
+    const headings = screen.getAllByRole('heading', { level: 1 })
+    expect(headings).toHaveLength(1)
+    const sheets = document.querySelectorAll('[data-slot="auth-sheet"]')
+    expect(sheets).toHaveLength(1)
+    const sheet = sheetOf(headings[0])
+    expect(sheet).not.toBeNull()
+    expect(sheet).toContainElement(screen.getByLabelText('Email'))
+    expect(sheet).toContainElement(screen.getByLabelText('Password'))
+  })
+
+  it('fills one button with the accent; the other ways in stay quiet', () => {
+    serverInfo.data = {
+      ...serverInfo.data,
+      sso_providers: [
+        { label: 'Okta', start_url: '/v1/auth/federation/start' },
+      ],
+    }
+    renderLogin()
+    const submit = screen.getByRole('button', { name: 'Sign in' })
+    const sheet = sheetOf(submit)
+    expect(sheet).not.toBeNull()
+    const filled = sheet!.querySelectorAll('.bg-accent')
+    expect(filled).toHaveLength(1)
+    expect(filled[0]).toBe(submit)
+    expect(submit).toHaveClass('w-full')
+    const okta = screen.getByRole('link', { name: 'Sign in with Okta' })
+    expect(sheet).toContainElement(okta)
+    expect(okta).not.toHaveClass('bg-accent')
+  })
+
+  it('puts the status link under the sheet, not inside it', () => {
+    renderLogin()
+    const status = screen.getByRole('link', { name: 'System status' })
+    expect(sheetOf(status)).toBeNull()
+    expect(screen.getByRole('main')).toContainElement(status)
+  })
+
+  it('says a refused sign-in in a notice inside the sheet, announced', async () => {
+    auth.login.mockRejectedValue(
+      new ApiError(401, 'invalid_credentials', 'invalid credentials'),
+    )
+    const user = userEvent.setup()
+    renderLogin()
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com')
+    await user.type(screen.getByLabelText('Password'), 'wrong')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Incorrect email or password.')
+    expect(alert).toHaveAttribute('data-slot', 'notice')
+    expect(alert).toHaveAttribute('data-tone', 'bad')
+    expect(sheetOf(alert)).not.toBeNull()
   })
 })
 

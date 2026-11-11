@@ -1017,3 +1017,99 @@ describe('AlertingView — one orange control on an empty route list', () => {
     expect(buttons[0].className).toContain('bg-accent')
   })
 })
+
+// A TEST SIGNAL THE ENGINE REFUSES BY EDITION is the calm edition line, never its sentence in
+// red; any other failure says the engine's sentence, as it always did.
+describe('AlertingView — a test signal that fails', () => {
+  async function evaluate() {
+    const user = userEvent.setup()
+    wrap(<AlertingView />)
+    await user.click(
+      await screen.findByRole('combobox', { name: /event type/i }),
+    )
+    await user.click(
+      await screen.findByRole('option', { name: 'finding.reported' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Evaluate' }))
+  }
+
+  it('refused by edition: the edition line, calm', async () => {
+    api.evaluateRoutes.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'engineer',
+        capability: 'notify',
+      }),
+    )
+    await evaluate()
+    await waitFor(() => expect(toastMock.info).toHaveBeenCalledOnce())
+    const { container } = render(<>{toastMock.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Engineer.')
+    expect(toastMock.error).not.toHaveBeenCalled()
+  })
+
+  it('any other failure: the engine’s sentence', async () => {
+    api.evaluateRoutes.mockRejectedValue(
+      new ApiError(400, 'invalid', 'event_type is not a known type'),
+    )
+    await evaluate()
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        'event_type is not a known type',
+      ),
+    )
+    expect(toastMock.info).not.toHaveBeenCalled()
+  })
+})
+
+// A REQUEUE REFUSED BY EDITION IS NOT A PERMISSION REFUSAL. The requeue's own box said
+// «needs the notify route admin permission» beside the edition toast: the person's role was
+// fine, the edition answered. The edition line is the only words; a role 403 keeps its box.
+describe('AlertingView — a requeue refused by edition', () => {
+  async function requeue() {
+    const user = userEvent.setup()
+    wrap(<AlertingView />)
+    await user.click(screen.getByRole('tab', { name: /dead letters/i }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: /requeue this notification to slack-sec/i,
+      }),
+    )
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: /^requeue notification$/i,
+      }),
+    )
+  }
+
+  it('says the edition line, never a permission it does not lack', async () => {
+    api.redeliverOutbox.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'engineer',
+        capability: 'notify',
+      }),
+    )
+    await requeue()
+    await waitFor(() => expect(toastMock.info).toHaveBeenCalledOnce())
+    // The dialog closes in the same handler that would draw the box: once it is gone, a box
+    // drawn by this refusal would be on screen.
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByText(/not requeued/i)).not.toBeInTheDocument()
+    const { container } = render(<>{toastMock.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Engineer.')
+    expect(container).not.toHaveTextContent(/permission/i)
+  })
+
+  it('a role 403 still names the permission, in its calm box', async () => {
+    api.redeliverOutbox.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'forbidden'),
+    )
+    await requeue()
+    const box = await screen.findByText(
+      /needs the notify route admin permission/i,
+    )
+    expect(box.closest('[role="status"]')).not.toBeNull()
+    expect(toastMock.info).not.toHaveBeenCalled()
+  })
+})

@@ -151,7 +151,8 @@ export function classifyFailure(err: unknown): Failure {
   if (base.code === 'version_required') {
     return { ...base, kind: 'version_required' }
   }
-  if (err.status === 403) return { ...base, kind: 'forbidden' }
+  // Role or edition alike: a refusal, said calmly, never `other`'s raw code in red.
+  if (err.isForbiddenOrEdition) return { ...base, kind: 'forbidden' }
   if (err.status === 404) return { ...base, kind: 'not_found' }
   if (err.status === 412) return { ...base, kind: 'version_mismatch' }
   if (err.status === 428) return { ...base, kind: 'version_required' }

@@ -6,7 +6,8 @@
 // 0.5, its 0.7 places), on the seeded demo engine scripts/web-e2e-demo.sh boots. What jsdom
 // cannot measure is measured here: the Overview header keeps its height while the page loads,
 // the search hint names this platform's key, the left navigation shows Sessions, Files and Tools
-// then More, cuts no label and folds from the keyboard, the narrow drawer holds the same
+// then Settings with the administrative places one level under it, cuts no label and folds
+// from the keyboard, the narrow drawer holds the same
 // places, and a retired area directory keeps its query and hash.
 //
 // With CAPTURE_DIR set it also photographs the navigation at 1440 px and its drawer at 390 px
@@ -130,11 +131,11 @@ test.describe('the navigation and the Overview header @nav3121', () => {
     const hint = /mac/i.test(platform) ? '⌘K' : 'Ctrl+K'
     // The hint is drawn, not text, so the button's text stays inside its name (WCAG 2.5.3).
     await expect(search.locator('kbd')).toHaveAttribute('data-keys', hint)
-    await expect(search).toHaveText('Search')
+    await expect(search).toHaveText('Search or go to…')
     await expect(search).toHaveAttribute('title', 'Search and commands')
   })
 
-  test('the left navigation shows Sessions, Files and Tools, then More with the rest below it, and wraps no word', async ({
+  test('the left navigation lists every place in order, Governance and Administration under their labels and Settings at the foot, and wraps no word', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
@@ -143,31 +144,15 @@ test.describe('the navigation and the Overview header @nav3121', () => {
     await page.goto('/workspace')
     const nav = page.locator('[data-slot="sidebar"]')
     await expect(nav).toBeVisible()
-    // The places and the More button, in the order they are drawn.
-    const drawn = () =>
-      nav
-        .locator('a[data-place], button:has-text("More")')
-        .evaluateAll((items) =>
-          items.map((e) => e.getAttribute('data-place') ?? 'more'),
-        )
-    // The More state is the person's preference, kept with their account: start folded.
-    const more = nav.getByRole('button', { name: 'More', exact: true })
-    if ((await more.getAttribute('aria-expanded')) === 'true')
-      await more.click()
-    // A new person sees the first places and More; More opens the rest below it. Folded,
-    // only a place with something waiting shows under More (Rules, when the seed has a
-    // pending approval).
-    const folded = await drawn()
-    expect(folded.slice(0, 4)).toEqual(['sessions', 'files', 'tools', 'more'])
-    expect(folded.at(-1)).toBe('settings')
-    expect(folded.slice(4, -1).filter((p) => p !== 'rules')).toEqual([])
-    await more.click()
-    expect(await drawn()).toEqual([
+    // Every place, in the order it is drawn: nothing is folded behind a More.
+    const drawn = await nav
+      .locator('a[data-place]')
+      .evaluateAll((items) => items.map((e) => e.getAttribute('data-place')))
+    expect(drawn).toEqual([
+      'now',
       'sessions',
       'files',
       'tools',
-      'more',
-      'now',
       'rules',
       'usage',
       'activity',
@@ -176,16 +161,19 @@ test.describe('the navigation and the Overview header @nav3121', () => {
       'operations',
       'settings',
     ])
-    // One noun per place, and no group header above any of them.
-    await expect(nav.locator('section, h2')).toHaveCount(0)
+    await expect(
+      nav.getByRole('button', { name: 'More', exact: true }),
+    ).toHaveCount(0)
+    // One noun per place; the two groups under their labels.
+    await expect(nav.locator('h2')).toHaveText(['Governance', 'Administration'])
     const places = await nav
       .locator('a[data-place] > span:first-of-type')
       .evaluateAll((spans) => spans.map((s) => s.textContent?.trim()))
     expect(places).toEqual([
+      'Overview',
       'Sessions',
       'Files',
       'Tools',
-      'Overview',
       'Rules',
       'Usage',
       'Audit',
@@ -194,8 +182,11 @@ test.describe('the navigation and the Overview header @nav3121', () => {
       'Operations',
       'Settings',
     ])
-    // No second navigation: no places in the top bar, no All areas, no phone bar.
-    await expect(page.locator('[data-slot="topbar"] nav')).toHaveCount(0)
+    // No second navigation: no places in the top bar (only the place's own pages), no All
+    // areas, no phone bar at this width.
+    await expect(
+      page.locator('[data-slot="topbar"] a[data-place]'),
+    ).toHaveCount(0)
     await expect(page.getByText('All areas', { exact: true })).toHaveCount(0)
     await expect(page.locator('[data-slot="phone-bar"]')).toHaveCount(0)
     // A label grows to a second line rather than being cut.
@@ -247,7 +238,11 @@ test.describe('the navigation and the Overview header @nav3121', () => {
       .evaluateAll((links) => links.map((a) => a.getAttribute('data-place')))
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(page.locator('[data-slot="sidebar"]')).toBeHidden()
-    await page.getByRole('button', { name: 'Open navigation' }).click()
+    // No menu button on a phone: the phone bar's More opens the navigation.
+    await page
+      .locator('[data-slot="phone-navigation"]')
+      .getByRole('button', { name: 'More', exact: true })
+      .click()
     const drawer = page.locator('[data-slot="navigation-drawer"]')
     await expect(drawer).toBeVisible()
     const narrow = await drawer
@@ -255,10 +250,7 @@ test.describe('the navigation and the Overview header @nav3121', () => {
       .evaluateAll((links) => links.map((a) => a.getAttribute('data-place')))
     expect(narrow).toEqual(desktop)
     await shoot(page, 'navigation-mobile-drawer-light')
-    // The drawer's More opens the same places below it; the drawer stays open.
-    const more = drawer.getByRole('button', { name: 'More', exact: true })
-    if ((await more.getAttribute('aria-expanded')) === 'false')
-      await more.click()
+    // Choosing a place closes the drawer.
     await drawer.getByRole('link', { name: 'Overview', exact: true }).click()
     await expect(drawer).toBeHidden()
     await expect(page).toHaveURL(/\/now$/)

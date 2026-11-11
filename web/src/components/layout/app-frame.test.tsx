@@ -65,8 +65,16 @@ describe('the frame from a keyboard', () => {
     ) as HTMLElement
     expect(sidebar.nextElementSibling).toBe(sheet)
     expect(sheet.contains(sidebar)).toBe(false)
-    // The canvas does not float: no inset, no radius, no shadow.
-    expect(sheet.className).not.toMatch(/shadow|rounded|m-2/)
+    // One raised sheet on the darker frame: 8 px from the window, its edge an inset hairline
+    // inside the raised shadow, not a border; flat and edge to edge on a phone.
+    expect(sheet).toHaveClass(
+      'rounded-panel',
+      'my-2',
+      'mr-2',
+      'border-0',
+      'shadow-[var(--shadow-raised),inset_0_0_0_1px_var(--line)]',
+      'max-[760px]:shadow-none',
+    )
     // No phone bar: below 761 px the same navigation is a drawer.
     expect(document.querySelector('[data-slot="phone-bar"]')).toBeNull()
   })

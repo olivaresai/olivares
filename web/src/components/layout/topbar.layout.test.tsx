@@ -4,8 +4,9 @@
 //
 // Structure of the top bar (0.5, after and). jsdom does not lay out, so the pixel
 // facts live in the browser captures; what is pinned here is what those pixels depend on: ONE
-// 56 px ROW with the page title and four controls (the menu button below 761 px, search,
-// notifications and the account) and no places, and the Tab order equal to the reading order.
+// 52 px ROW with the page title and its controls (search, notifications and the account; below
+// 761 px the mark opens the bar and the phone bar's More opens the navigation) and no places, and
+// the Tab order equal to the reading order.
 // The version, Stop all and the stops live in the status bar (status-bar.test.tsx).
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -166,52 +167,79 @@ afterEach(() => {
   })
 })
 
-/** Every control a person can reach in the bar. */
-const controls = (header: HTMLElement) => [
-  ...header.querySelectorAll<HTMLElement>('a, button'),
-]
-
 describe('the top bar holds the title and four controls, nothing else (0.5)', () => {
-  it('is one 56 px row: the menu button, the page title, search, notifications and the account', async () => {
-    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+  it('is one 52 px row: the page title, search, notifications and the account', async () => {
+    const { container } = renderIntel(<Topbar />)
     const header = container.querySelector('header') as HTMLElement
     expect(header.getAttribute('data-slot')).toBe('topbar')
-    expect(header.className).toContain('h-14')
+    expect(header.className).toContain('h-[52px]')
     expect(header.className).toContain('flex-nowrap')
     // No places: the left navigation is the only one.
-    expect(within(header).queryByRole('navigation')).toBeNull()
-    expect(within(header).queryAllByRole('link')).toEqual([])
+    expect(
+      within(header).getByRole('navigation', { name: 'People' }),
+    ).toBeInTheDocument()
+    expect(
+      within(header).queryByRole('button', { name: /, Account$/ }),
+    ).toBeNull()
+    // No shortcut legend: the keys live in the command palette and the `?` keymap.
+    expect(header.querySelector('[data-testid="hint-bar"]')).toBeNull()
+    expect(header).not.toHaveTextContent(/approve|deny|launcher/)
     expect(
       header.querySelector('[data-slot="topbar-title"]'),
     ).toHaveTextContent('People')
-    await waitFor(() => expect(controls(header)).toHaveLength(4))
-    const [menu, search, bell, account] = controls(header)
-    expect(menu).toHaveAccessibleName('Open navigation')
-    expect(menu.className).toContain('min-[761px]:hidden')
+    // The title is the bar's one bold line: 15 px, 17 px heavier on a phone.
+    expect(header.querySelector('[data-slot="topbar-title"]')).toHaveClass(
+      'text-body-l',
+      'font-bold',
+      '[&_h1]:text-body-l',
+      '[&_h1]:font-bold',
+      'max-[760px]:text-heading',
+      'max-[760px]:font-extrabold',
+    )
+    await waitFor(() =>
+      expect(within(header).getAllByRole('button')).toHaveLength(2),
+    )
+    const [search, bell] = within(header).getAllByRole('button')
     expect(search).toHaveAccessibleName('Search and commands')
     expect(bell).toHaveAccessibleName('Notifications')
-    expect(account).toHaveAccessibleName(/, Account$/)
   })
 
-  it('opens the navigation drawer from its menu button', async () => {
-    const user = userEvent.setup()
-    const onMenu = vi.fn()
-    renderIntel(<Topbar onMenu={onMenu} />)
-    await user.click(screen.getByRole('button', { name: 'Open navigation' }))
-    expect(onMenu).toHaveBeenCalledOnce()
+  it("on a phone the place's pages take a second row, never the gap beside search", () => {
+    // At 390 px the row squeezed into the 20 px left between the title and the controls:
+    // its current member ran under the search button, cut to «Se». Below 761 px the bar
+    // wraps (title and controls, then the pages on a full-width scrolling row).
+    const { container } = renderIntel(<Topbar />)
+    const header = container.querySelector('header') as HTMLElement
+    expect(header.className).toContain('max-[760px]:flex-wrap')
+    expect(header.className).toContain('max-[760px]:h-auto')
+    const pages = within(header).getByRole('navigation', { name: 'People' })
+    expect(pages.className).toContain('max-[760px]:order-last')
+    expect(pages.className).toContain('max-[760px]:basis-full')
+  })
+
+  it('opens with the mark on a phone, a decoration and no menu button: the phone bar opens the navigation', () => {
+    const { container } = renderIntel(<Topbar />)
+    const header = container.querySelector('header') as HTMLElement
+    const mark = header.querySelector('svg[viewBox="3.5 2 28 28"]')
+    expect(mark).toHaveAttribute('aria-hidden', 'true')
+    expect(mark).toHaveClass('size-6', 'min-[761px]:hidden')
+    expect(mark?.closest('a, button')).toBeNull()
+    expect(
+      within(header).queryByRole('button', { name: 'Open navigation' }),
+    ).toBeNull()
   })
 
   it('names the page the address is: a place of its own by its place name', () => {
     routerState.pathname = '/permissions'
     routerState.search = { tab: 'approvals' }
-    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+    const { container } = renderIntel(<Topbar />)
     expect(
       container.querySelector('[data-slot="topbar-title"]'),
     ).toHaveTextContent('Rules')
   })
 
   it('moves the version, theme, favorites, the mark and Stop all out of the bar', () => {
-    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+    const { container } = renderIntel(<Topbar />)
     const header = container.querySelector('header') as HTMLElement
     expect(within(header).queryByTestId('deployment-identity')).toBeNull()
     expect(within(header).queryByText('1.0', { exact: true })).toBeNull()
@@ -234,7 +262,7 @@ describe('the top bar holds the title and four controls, nothing else (0.5)', ()
   })
 
   it('names search by its visible word, and folds it to its icon below 1101 px', () => {
-    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+    const { container } = renderIntel(<Topbar />)
     const search = within(container).getByRole('button', {
       name: 'Search and commands',
     })
@@ -243,11 +271,19 @@ describe('the top bar holds the title and four controls, nothing else (0.5)', ()
     expect(search.className).toContain('max-[1100px]:w-9')
   })
 
-  it('Tab order is the reading order: menu, search, notifications, account', async () => {
+  it("Tab order is the reading order: the place's pages, search, notifications, account", async () => {
     const user = userEvent.setup()
-    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+    const { container } = renderIntel(<Topbar />)
     const header = container.querySelector('header') as HTMLElement
-    await waitFor(() => expect(controls(header)).toHaveLength(4))
+    await waitFor(() =>
+      expect(within(header).getAllByRole('button')).toHaveLength(2),
+    )
+    // The place's pages follow the title, before the controls, as A2 draws it.
+    const nav = within(header).getByRole('navigation', { name: 'People' })
+    const pages = within(nav)
+      .getAllByRole('link')
+      .map((link) => link.textContent ?? '')
+    expect(pages.length).toBeGreaterThan(1)
     const order: string[] = []
     await user.tab()
     while (header.contains(document.activeElement)) {
@@ -255,10 +291,10 @@ describe('the top bar holds the title and four controls, nothing else (0.5)', ()
       order.push(el.getAttribute('aria-label') ?? el.textContent ?? '')
       await user.tab()
     }
-    expect(order[0]).toBe('Open navigation')
-    expect(order[1]).toBe('Search and commands')
-    expect(order[2]).toBe('Notifications')
-    expect(order[3]).toMatch(/, Account$/)
+    expect(order.slice(0, pages.length)).toEqual(pages)
+    expect(order[pages.length]).toBe('Search and commands')
+    expect(order.at(-1)).toBe('Notifications')
+    expect(order.some((label) => /, Account$/.test(label))).toBe(false)
   })
 })
 
@@ -355,7 +391,7 @@ describe('the bar speaks the platform and names its icons', () => {
     ['MacIntel', '⌘K'],
   ])('on %s the search hint reads %s', (platform, hint) => {
     onPlatform(platform)
-    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+    const { container } = renderIntel(<Topbar />)
     const search = within(container).getByRole('button', {
       name: 'Search and commands',
     })
@@ -366,7 +402,7 @@ describe('the bar speaks the platform and names its icons', () => {
   })
 
   it('gives every control that shows only an icon a tooltip with its name', async () => {
-    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+    const { container } = renderIntel(<Topbar />)
     const header = container.querySelector('header') as HTMLElement
     /** The text a sighted person reads on the control: screen-reader-only text aside. */
     const visibleText = (el: Element) => {
@@ -382,13 +418,14 @@ describe('the bar speaks the platform and names its icons', () => {
       .map((el) => el.getAttribute('aria-label') ?? el.outerHTML.slice(0, 80))
     expect(silent).toEqual([])
     // The controls whose visible text is not their name say it on hover too.
+    const search = within(header).getByRole('button', {
+      name: 'Search and commands',
+    })
+    expect(search).toHaveAttribute('title', 'Search and commands')
+    // The phone's search is a 44 px target.
+    expect(search).toHaveClass('max-[760px]:size-11')
     expect(
-      within(header).getByRole('button', { name: 'Search and commands' }),
-    ).toHaveAttribute('title', 'Search and commands')
-    // The account control names itself in the console's tooltip, not a native title.
-    const account = within(header).getByRole('button', { name: /, Account$/ })
-    expect(account).not.toHaveAttribute('title')
-    await userEvent.setup().hover(account)
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Account')
+      within(header).queryByRole('button', { name: /, Account$/ }),
+    ).toBeNull()
   })
 })

@@ -9,6 +9,7 @@ package sessions
 import (
 	"context"
 	"errors"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"strings"
 	"testing"
@@ -119,6 +120,45 @@ func TestRuntimeAttemptInterruptKeepsOwnedProcessAndRecordsReason(t *testing.T) 
 	}
 	if !found {
 		t.Fatal("human reason absent from fenced event audit")
+	}
+}
+
+// A turn on a person's own login is interrupted by that person only: an administrator and a
+// colleague are refused, and so is a caller that names only an actor string.
+func TestRuntimeAttemptInterruptRefusesAnotherPersonsOwnedLogin(t *testing.T) {
+	m, st, tenant, profile := codexHarness(t, AuthSourceAccountHome, WithClock(&testClock{now: time.Now().UTC()}))
+	setCodexFixture(t, profile, codexFixture{ThreadID: "thread-owned-interrupt", Account: "apikey"})
+	dto, err := codexLaunch(t, m, tenant, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, _ := dto.Completion.Identity()
+	live, _ := m.rt.getLive(tenant, dto.RunRef)
+	owner := auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), CredID: model.NewID()}
+	setProfileOwner(t, m, tenant, profile.Ref, owner.UserID.String())
+	if err = m.sendTextInput(context.Background(), tenant, dto.RunRef, "long task"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "active provider turn", func() bool { return live.session.ActiveTurn() != "" })
+	target := RuntimeInputTarget{Tenant: tenant, WorkspaceID: identity.WorkspaceID, RunRef: identity.RunRef, RunID: model.ID(storedRunIDForTest(t, st, tenant, identity.RunRef)), ExpectedLaunch: identity.RuntimeLaunchID, ExpectedSID: identity.SessionSID}
+
+	for who, p := range map[string]auth.Principal{
+		"administrator": {Kind: auth.KindUser, UserID: model.NewID(), CredID: model.NewID(), Superadmin: true},
+		"colleague":     {Kind: auth.KindUser, UserID: model.NewID(), CredID: model.NewID()},
+	} {
+		if result, err := m.InterruptRuntimeAttemptFor(context.Background(), target, p, "not mine"); !errors.Is(err, ErrProfileNotAssigned) || result.Attempted {
+			t.Errorf("%s: interrupt = %+v %v, want refused as not assigned", who, result, err)
+		}
+	}
+	token := auth.Principal{Kind: auth.KindToken, UserID: owner.UserID, CredID: model.NewID()}
+	if result, err := m.InterruptRuntimeAttemptFor(context.Background(), target, token, "a token is not a person"); !errors.Is(err, ErrRuntimeInputAuthority) || result.Attempted {
+		t.Errorf("owner's token: interrupt = %+v %v, want refused as no human authority", result, err)
+	}
+	if result, err := m.InterruptRuntimeAttempt(context.Background(), target, "user:"+owner.UserID.String(), model.ActorUser, "actor only"); !errors.Is(err, ErrProfileNotAssigned) || result.Attempted {
+		t.Errorf("actor string: interrupt = %+v %v, want refused as not assigned", result, err)
+	}
+	if result, err := m.InterruptRuntimeAttemptFor(context.Background(), target, owner, "my wrong turn"); err != nil || result.Outcome != RuntimeInputAccepted || !result.Attempted {
+		t.Fatalf("owner: interrupt = %+v %v, want accepted", result, err)
 	}
 }
 

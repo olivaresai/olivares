@@ -10,6 +10,19 @@
     "unavailableDescription": "セッションの読み取りが応答しませんでした。上の数値には影響しません。",
     "untitled": "無題のセッション"
   },
+  "folders": {
+    "title": "あなたのフォルダー",
+    "start": "開始",
+    "startIn": "{{folder}} で開始",
+    "canWork": "作業できます",
+    "readOnly": "読み取り専用",
+    "showAll": "すべてのフォルダーを表示（{{total}}）",
+    "loading": "フォルダーを読み込んでいます",
+    "emptyTitle": "まだフォルダーがありません",
+    "emptyDescription": "管理者がフォルダーへのアクセスを付与すると、ここに表示されます。",
+    "unavailableTitle": "フォルダーを読み込めませんでした",
+    "unavailableDescription": "下のセッションには影響ありません。"
+  },
   "empty": {
     "title": "まだ表示できるものがありません",
     "description": "お使いのロールには、いずれのエステートモジュールに対する読み取りアクセスも付与されていません。概要を表示するには、管理者に読み取りの付与を依頼してください。"

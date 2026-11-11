@@ -156,7 +156,8 @@
     "statuses": {
       "active": "アクティブ",
       "inactive": "非アクティブ",
-      "error": "エラー"
+      "error": "エラー",
+      "suspended": "停止中"
     },
     "roles": {
       "viewer": "閲覧者",
@@ -172,7 +173,25 @@
     "endSessionsFor": "{{email}} のサインインを終了しますか？",
     "endSessionsBody": "{{email}} のすべてのアクティブなサインインは、この組織で使用できなくなります。他の組織へのサインイン、API トークン、アカウントは変更されません。",
     "sessionsEnded": "この組織へのアクセスを終了しました",
-    "totpResetDone": "TOTP 要素をリセットしました。"
+    "totpResetDone": "TOTP 要素をリセットしました。",
+    "search": "メンバーを検索",
+    "filterLabel": "ステータスで絞り込む",
+    "filterAll": "すべてのステータス",
+    "noMatch": "該当する人がいません",
+    "noMatchHint": "検索またはステータスの絞り込みを変更してください。",
+    "bulkLabel": "選択したメンバーの操作",
+    "selected": "選択中: {{n}}",
+    "selectAll": "表示中のメンバーをすべて選択",
+    "selectRow": "{{email}} を選択",
+    "suspend": "停止",
+    "reactivate": "再開",
+    "suspendTitle": "アクセスを停止",
+    "suspendBody": "{{email}} はこの組織に今すぐサインインできなくなり、API トークンも使えなくなります。ロールとグループは残り、いつでも再開できます。",
+    "suspendBodyMany": "{{n}} 人がこの組織に今すぐサインインできなくなり、API トークンも使えなくなります。ロールとグループは残り、いつでも再開できます。",
+    "suspendFor": "{{email}} を停止",
+    "reactivateFor": "{{email}} を再開",
+    "suspendedToast": "停止しました: {{n}}",
+    "reactivatedToast": "再開しました: {{n}}"
   },
   "superadmins": {
     "title": "インストールの管理者",
@@ -313,7 +332,7 @@
       "sessions": "シークレットはストアから削除されます。これを受け取るセッションは実行を続けますが、再作成するまで再開できず、これを指定するテンプレートも起動できません。"
     },
     "sessionCaption": "セッションが環境変数として受け取れるシークレットです。名前は env/ で始まります。値が再び表示されることはありません。",
-    "credentialCaption": "セッションがエンジンのヘルパーを通して使える管理されたクレデンシャル（Business）。名前は credential/ で始まります。値が再び表示されることはありません。",
+    "credentialCaption": "セッションがエンジンのヘルパーを通して使える管理されたクレデンシャル（Olivares AI Business）。名前は credential/ で始まります。値が再び表示されることはありません。",
     "colValue": "値",
     "colChanged": "最終変更",
     "colReference": "参照",
@@ -935,7 +954,7 @@
   "activation": {
     "title": "Business 有効化",
     "caption": "エディションに含まれるモジュールを有効にします。安全な既定値を持つ制御は有効化され、シークレットやポリシー確認が必要な制御は、入力して昇格するために準備されます。",
-    "unavailable": "有効化は Business エディションで利用できます。",
+    "unavailable": "有効化は Olivares AI Business エディションで利用できます。",
     "enablePreset": "プリセットを有効化",
     "addon": "モジュール",
     "state": "状態",

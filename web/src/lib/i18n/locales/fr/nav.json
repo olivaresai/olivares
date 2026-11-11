@@ -370,18 +370,27 @@
       "placeholder": "Entrée met un message en file pour après ce tour",
       "placeholderSteer": "Entrée le met en file pour après ce tour, Ctrl+Entrée le redirige maintenant",
       "discarded": "La session a été libérée alors que ces messages étaient encore en file :",
-      "copy": "Copier"
-    }
+      "copy": "Copier",
+      "placeholderQueueKey": "{{key}} met un message en file pour après ce tour",
+      "placeholderSteerKey": "{{key}} le redirige maintenant"
+    },
+    "stash": "Mettre ce brouillon de côté",
+    "stashRestore": "Rétablir le brouillon mis de côté",
+    "plan": "Plan",
+    "planHint": "Planifier d'abord : l'outil lit et propose un plan, sans rien modifier. S'applique dès le prochain message."
   },
   "shell": {
     "more": "Plus",
     "searchCommands": "Recherche et commandes",
     "search": "Recherche",
+    "searchGo": "Rechercher ou aller à…",
     "stopAll": "Tout arrêter",
     "workspaceCount": "Espaces de travail : {{count}}",
     "rail": {
       "title": "Sessions",
-      "all": "Toutes",
+      "seeAll_one": "Voir {{count}} session",
+      "seeAll_many": "Voir les {{count}} sessions",
+      "seeAll_other": "Voir les {{count}} sessions",
       "groups": {
         "needsYou": "Vous attend",
         "working": "En cours",
@@ -431,10 +440,10 @@
     "killswitch": {
       "estateStopped": "TOUS LES AGENTS ARRÊTÉS",
       "estateBody": "Les agents ne peuvent pas agir tant que deux comptes utilisateur n'ont pas approuvé le redémarrage.",
-      "agentStops": "{{count}} arrêt d’agent actif",
-      "agentStops_one": "{{count}} arrêt d’agent actif",
-      "agentStops_many": "{{count}} arrêts d’agent actifs",
-      "agentStops_other": "{{count}} arrêts d’agent actifs",
+      "agentStops": "{{count}} agents arrêtés",
+      "agentStops_one": "{{count}} agent arrêté",
+      "agentStops_many": "{{count}} agents arrêtés",
+      "agentStops_other": "{{count}} agents arrêtés",
       "none": "Rien n'est arrêté. Les sessions et les agents fonctionnent normalement."
     },
     "status": {
@@ -442,6 +451,9 @@
       "running_one": "{{count}} session ouverte",
       "running_many": "{{count}} sessions ouvertes",
       "running_other": "{{count}} sessions ouvertes",
+      "needYou_one": "{{count}} vous attend",
+      "needYou_many": "{{count}} vous attendent",
+      "needYou_other": "{{count}} vous attendent",
       "usage": "Utilisation de {{tool}}",
       "fiveHour": "5 h",
       "week": "sem.",
@@ -452,7 +464,6 @@
     },
     "collapse": "Réduire la navigation",
     "expand": "Développer la navigation",
-    "openNavigation": "Ouvrir la navigation",
     "closeNavigation": "Fermer la navigation"
   },
   "places": {
@@ -478,6 +489,10 @@
     "securityRedTeam": "Exécutions et notation de red team",
     "operationsDeploy": "Déployer des agents sur d’autres hôtes",
     "operationsResidency": "Résidence des données et locataires",
-    "retentionSchedules": "Les calendriers ne sont appliqués que dans Olivares Business : cette édition les conserve et ne purge rien."
+    "retentionSchedules": "Les calendriers ne sont appliqués que dans Olivares AI Business : cette édition les conserve et ne purge rien."
+  },
+  "groups": {
+    "control": "Gouvernance",
+    "admin": "Administration"
   }
 }

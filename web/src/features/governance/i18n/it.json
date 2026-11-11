@@ -145,6 +145,10 @@
     "expiredAt": "Scaduta {{time}}",
     "approveOnce": "Approva una volta",
     "approveForSession": "Approva per questa sessione",
+    "allowances": "Autorizzazioni della sessione",
+    "revokeAllowance": "Revoca",
+    "sessionPolicy": "La policy richiede la revisione di ogni richiesta.",
+    "allowancesError": "Impossibile leggere o aggiornare le autorizzazioni della sessione.",
     "approving": "Approvazione…",
     "deny": "Rifiuta",
     "noMatch": "Nessuna richiesta corrisponde alla ricerca",
@@ -196,10 +200,11 @@
     "reasonHint": "Contesto per i revisori (facoltativo).",
     "requiredApprovals": "Approvazioni richieste",
     "requiredApprovalsHint": "Ignorato se si applica una policy di approvazione corrispondente — la policy ha la precedenza.",
-    "expiresInSeconds": "Scade tra (secondi)",
-    "escalateInSeconds": "Escalation tra (secondi)",
     "submit": "Invia richiesta",
-    "created": "Richiesta di approvazione aperta"
+    "created": "Richiesta di approvazione aperta",
+    "expiresIn": "Scade tra",
+    "escalateIn": "Escalation tra",
+    "subjectFold": "A cosa si applica (facoltativo)"
   },
   "detail": {
     "title": "Richiesta di approvazione",
@@ -278,23 +283,20 @@
     "denyImplicit": "Rifiuto (implicito)",
     "requiredApprovals": "Approvazioni richieste",
     "requiredApprovalsHint": "Da 0 a 64. Se vuoto o 0 si usa il valore predefinito dell'engine, che può essere più alto per le azioni critiche.",
-    "expiresInSeconds": "Scade tra (secondi)",
-    "expiresInSecondsHint": "0–31536000 (0 = mai).",
-    "escalateInSeconds": "Escalation tra (secondi)",
-    "escalateInSecondsHint": "0–31536000 (0 = mai).",
     "countError": "Inserisci un numero intero da 0 a {{max}}.",
     "matchAction": "Azione corrispondente",
     "matchActionHint": "Vuoto = corrisponde a qualsiasi azione.",
     "matchSubjectKind": "Tipo di soggetto corrispondente",
     "matchSubjectKindHint": "Vuoto = corrisponde a qualsiasi tipo di soggetto.",
-    "needsBusiness": "Un livello di rischio o un numero di approvazioni diverso dal predefinito dell'azione richiede Business. Disattiva questa policy per tenerla salvata.",
     "create": "Crea policy",
     "save": "Salva modifiche",
     "confirmCreateBody": "Una policy ABAC abilitata limita subito ulteriormente l'accesso; una policy di approvazione abilitata inizia a richiedere approvazioni umane per le azioni corrispondenti. Ha effetto immediato.",
     "confirmUpdateBody": "Se è abilitata, la modifica ha effetto immediato sul percorso di autorizzazione / sul flusso di approvazione. Il tipo di policy non si può cambiare.",
     "created": "Policy creata",
     "updated": "Policy aggiornata",
-    "credentialWarning": "Sembra un valore di credenziale. Le regole delle policy contengono solo riferimenti e selettori — mai un segreto."
+    "credentialWarning": "Sembra un valore di credenziale. Le regole delle policy contengono solo riferimenti e selettori — mai un segreto.",
+    "expiresIn": "Scade tra",
+    "escalateIn": "Escalation tra"
   },
   "policyRemove": {
     "title": "Eliminare questa policy?",
@@ -735,5 +737,15 @@
       "editor": "Editor",
       "owner": "Proprietario"
     }
+  },
+  "durations": {
+    "none": "Nessun limite",
+    "h1": "1 ora",
+    "h4": "4 ore",
+    "h8": "8 ore",
+    "h24": "24 ore",
+    "d7": "7 giorni",
+    "d30": "30 giorni",
+    "seconds": "{{value}} secondi"
   }
 }

@@ -72,7 +72,13 @@
     "editorSsh": "エディターの SSH ホスト",
     "editorSshHint": "別のマシンにあるセッションフォルダーにエディターが接続する方法。user@host または user@host:port の形式。空欄の場合はこのコンソールの提供元アドレスを使い、このコンピューターなら SSH は使いません。",
     "reduceMotion": "動きを減らす",
-    "reduceMotionHint": "動きをフェードに置き換えます。システムが求めたときにオンになります。"
+    "reduceMotionHint": "動きをフェードに置き換えます。システムが求めたときにオンになります。",
+    "sendKey": "送信キー",
+    "sendKeyHint": "セッションでメッセージを送信するキーです。2つ目を選ぶと、Enter は改行になります。",
+    "sendWhileRunning": "ツールの作業中",
+    "sendWhileRunningHint": "ターンの実行中に送信キーが行うことです。Enter で送信する場合、Ctrl+Enter がもう一方を行います。",
+    "sendQueue": "待機させる",
+    "sendSteer": "ターンに割り込ませる"
   },
   "sessionNotifications": {
     "title": "セッション通知",
@@ -93,14 +99,14 @@
     "scope": "このインストールが応答するキーです。だれにとっても同じです。"
   },
   "edition": {
-    "scope": "このビルドのエディション、そのライセンス、Business で追加される機能。",
+    "scope": "このビルドのエディション、そのライセンス、Olivares AI Business で追加される機能。",
     "label": "エディション",
     "unknown": "このエンジンは報告していません",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business で追加されるもの",
+    "businessAdds": "Olivares AI Business で追加されるもの",
     "summary": {
       "Session cockpit and fleet deployment.": "セッションコックピットとフリートへのデプロイ。",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "名前付きで有効期限のあるゲストアクセスと、所有者が承認するメッセージ提案によるライブセッション共有。",
@@ -111,11 +117,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise には Business のすべてに加え、契約で合意した条件とそれに依存する機能が含まれます。"
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "{{edition}} エディション",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "エディションバッジを表示",
       "loadError": "バッジの設定を読み込めませんでした。",
       "saveError": "バッジの設定を保存できませんでした。もう一度お試しください。"
@@ -311,7 +319,7 @@
     "inactive": "トレースは無効です。",
     "apply": "適用",
     "saved": "トレース設定を保存しました。",
-    "businessRequired": "SIEM 配信と外部テレメトリエクスポートには Business が必要です。設定は保持されますが、Community はデータを送信しません。"
+    "businessRequired": "SIEM 配信と外部テレメトリエクスポートには Olivares AI Business が必要です。設定は保持されますが、Olivares AI Community はデータを送信しません。"
   },
   "signIn": {
     "methods": "サインイン方法",

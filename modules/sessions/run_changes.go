@@ -215,6 +215,7 @@ func (m *Module) handleRunChanges(w http.ResponseWriter, r *http.Request, mc api
 // handleRunChangedFile returns the current text of one file in the run's folder, or with
 // rev=HEAD the text git HEAD holds for it (?path=, relative to the folder; at most 256 KiB;
 // 404 when the folder has no readable git history or HEAD has no such file).
+// With turn and side=start|end|current, reads that turn snapshot instead of the live file.
 func (m *Module) handleRunChangedFile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	read := readChangedFile
 	switch rev := r.URL.Query().Get("rev"); rev {
@@ -225,7 +226,7 @@ func (m *Module) handleRunChangedFile(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusBadRequest, errorBody("rev must be HEAD"))
 		return
 	}
-	_, root, err := m.runRoot(r, mc)
+	dto, root, err := m.runRoot(r, mc)
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -235,6 +236,10 @@ func (m *Module) handleRunChangedFile(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	defer root.Close()
+	if r.URL.Query().Has("turn") {
+		m.readTurnFile(w, r, mc, dto)
+		return
+	}
 	out, err := read(root, r.URL.Query().Get("path"))
 	switch {
 	case errors.Is(err, fs.ErrInvalid):

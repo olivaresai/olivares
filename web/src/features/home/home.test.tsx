@@ -7,6 +7,7 @@ import {
   createTestQueryClient,
   renderIntel,
   screen,
+  userEvent,
   waitFor,
   within,
 } from '@/test/intel'
@@ -27,6 +28,7 @@ import { complianceApi } from '@/features/compliance/api'
 import { sessionsApi } from '@/features/sessions/api'
 import { inventoryApi } from '@/features/inventory/api'
 import { agentOpsApi } from '@/features/agentops/api'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { HomeView } from './home-view'
 import './i18n'
 
@@ -363,9 +365,11 @@ describe('Overview (RBAC gating + honest states)', () => {
 describe('Overview — Running and Recent rows', () => {
   // Overview reads two pages: the runs Olivares operates and the live sessions it observes.
   // A live session is a Running row and an ended one a Recent row. The header holds no lone
-  // report button.
+  // report button. The person also opens Usage, so the strip is drawn.
   const role = (p: string) =>
-    p === 'sessions:live:read' || p === 'sessions:run:read'
+    p === 'sessions:live:read' ||
+    p === 'sessions:run:read' ||
+    p === 'sessions:account:read'
   const page = (items: unknown[]) => ({ items, has_more: false }) as never
   const today = () => new Date().toISOString()
   const running = () => ({
@@ -697,5 +701,329 @@ describe('Now counts sessions, not the rows each one wrote', () => {
     await waitFor(() =>
       expect(within(live).getAllByRole('listitem')).toHaveLength(1),
     )
+  })
+})
+
+describe('Overview: the folders of a person who is given them', () => {
+  // The set the engine gives a member (memberModulePerms): its sessions and
+  // its folders, with no folder administration, no provider account and no
+  // organization read.
+  const MEMBER_SET = new Set([
+    'sessions:workspace:read',
+    'sessions:workspace:write',
+    'sessions:run:read',
+    'sessions:run:write',
+    'sessions:stop:write',
+    'sessions:output:read',
+    'sessions:live:read',
+    'sessions:profile:read',
+  ])
+  const member = (p: string) => MEMBER_SET.has(p)
+  const folder = (over: Record<string, unknown> = {}) => ({
+    workspace_ref: 'ws-invoices',
+    name: 'Invoices 2026',
+    root_path: '/srv/finance/invoices-2026',
+    mount_mode: 'rw',
+    max_read_bytes: 0,
+    dlp_mode: 'off',
+    state: 'active',
+    ...over,
+  })
+  const sessions = () => {
+    const at = new Date().toISOString()
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([]))
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(
+      page([
+        {
+          run_ref: 'r1',
+          tenant_id: 'demo',
+          state: 'running',
+          name: 'Payment reminders',
+          provider_driver: 'claude',
+          cost_micro_usd: 1_420_000,
+          created_at: at,
+          last_activity_at: at,
+        },
+      ]),
+    )
+  }
+  // A session the engine observes at work, with what it reported it cost.
+  const observed = () => {
+    const at = new Date().toISOString()
+    return {
+      session_ref: 'sess-observed',
+      attribution: 'legacy',
+      cc_state: 'active',
+      engine: 'claude',
+      summary: 'Draft the March reminders',
+      input_tokens: 0,
+      output_tokens: 0,
+      cost_micro_usd: 2_750_000,
+      event_count: 2,
+      tool_call_count: 2,
+      first_event_at: at,
+      last_event_at: at,
+      duration_seconds: 0,
+      critical: false,
+    }
+  }
+
+  afterEach(() => {
+    useNewSessionDialog.setState({
+      open: false,
+      draft: null,
+      opener: null,
+      advanced: null,
+    })
+  })
+
+  it('lists each folder with what a session may do there, and Start opens New session on it', async () => {
+    authState.can = member
+    sessions()
+    const list = vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue(
+      page([
+        folder(),
+        folder({
+          workspace_ref: 'ws-templates',
+          name: 'Document templates',
+          root_path: '/srv/finance/templates',
+          mount_mode: 'ro',
+        }),
+      ]),
+    )
+    renderIntel(<HomeView />)
+    const folders = await screen.findByRole('region', { name: 'Your folders' })
+    const start = await within(folders).findByRole('button', {
+      name: 'Start in Invoices 2026',
+      description: 'Can work',
+    })
+    expect(
+      within(folders).getByRole('button', {
+        name: 'Start in Document templates',
+        description: 'Read only',
+      }),
+    ).toBeInTheDocument()
+    expect(list).toHaveBeenCalledWith(
+      { state: 'active', limit: 200 },
+      expect.objectContaining({ tenant: 'demo' }),
+    )
+    // The folders come first; the person's sessions follow them.
+    expect(await screen.findByText('Payment reminders')).toBeInTheDocument()
+    await userEvent.click(start)
+    // Each fact apart: a deep match of the store walks the opener's whole DOM
+    // and React graph, and that walk does not end.
+    const dialog = useNewSessionDialog.getState()
+    expect(dialog.open).toBe(true)
+    expect(dialog.draft).toEqual({ workspace: 'ws-invoices' })
+    // Focus returns to the Start the person pressed.
+    expect(dialog.opener).toBe(start)
+  })
+
+  it('says Can work wherever a session writes, a folder it may not erase in too, and Read only where it only reads', async () => {
+    authState.can = member
+    sessions()
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue(
+      page([
+        folder(),
+        folder({
+          workspace_ref: 'ws-contracts',
+          name: 'Contracts',
+          root_path: '/srv/finance/contracts',
+          mount_mode: 'write_no_delete',
+        }),
+        folder({
+          workspace_ref: 'ws-templates',
+          name: 'Document templates',
+          root_path: '/srv/finance/templates',
+          mount_mode: 'ro',
+        }),
+      ]),
+    )
+    renderIntel(<HomeView />)
+    const folders = await screen.findByRole('region', { name: 'Your folders' })
+    expect(
+      await within(folders).findByRole('button', {
+        name: 'Start in Contracts',
+        description: 'Can work',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(folders).getByRole('button', {
+        name: 'Start in Invoices 2026',
+        description: 'Can work',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(folders).getByRole('button', {
+        name: 'Start in Document templates',
+        description: 'Read only',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('a person with no folder yet is told who gives one, and offered nothing to start', async () => {
+    authState.can = member
+    sessions()
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue(page([]))
+    renderIntel(<HomeView />)
+    const folders = await screen.findByRole('region', { name: 'Your folders' })
+    expect(
+      await within(folders).findByText('You have no folders yet'),
+    ).toBeInTheDocument()
+    expect(
+      within(folders).getByText(
+        'When your administrator gives you access to a folder, it will show here.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(folders).queryByRole('button')).toBeNull()
+    // Its sessions still show beside it.
+    expect(await screen.findByText('Payment reminders')).toBeInTheDocument()
+  })
+
+  it('a folders read that failed says so with Retry, never that there are none', async () => {
+    authState.can = member
+    sessions()
+    const list = vi
+      .spyOn(agentOpsApi, 'listWorkspaces')
+      .mockRejectedValueOnce(
+        new ApiError(500, 'server_error', 'boom', 'req-folders-1'),
+      )
+      .mockResolvedValue(page([folder()]))
+    renderIntel(<HomeView />)
+    const folders = await screen.findByRole('region', { name: 'Your folders' })
+    const failure = await within(folders).findByRole('alert')
+    expect(failure).toHaveTextContent('Couldn’t load your folders')
+    expect(failure).toHaveTextContent('req-folders-1')
+    expect(within(folders).queryByText('You have no folders yet')).toBeNull()
+    await userEvent.click(
+      within(failure).getByRole('button', { name: 'Retry' }),
+    )
+    expect(
+      await within(folders).findByRole('button', {
+        name: 'Start in Invoices 2026',
+      }),
+    ).toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('a refused folders read says so without Retry, never a failure', async () => {
+    authState.can = member
+    sessions()
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockRejectedValue(
+      new ApiError(403, 'forbidden', 'denied', 'req-folders-2'),
+    )
+    renderIntel(<HomeView />)
+    const folders = await screen.findByRole('region', { name: 'Your folders' })
+    expect(
+      await within(folders).findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
+    expect(within(folders).queryByRole('alert')).toBeNull()
+    expect(within(folders).queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(within(folders).queryByText('You have no folders yet')).toBeNull()
+  })
+
+  it('says, while the read is out, that it is loading the folders', async () => {
+    authState.can = member
+    sessions()
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockReturnValue(
+      new Promise(() => {}),
+    )
+    renderIntel(<HomeView />)
+    const folders = await screen.findByRole('region', { name: 'Your folders' })
+    expect(within(folders).getByRole('status')).toHaveTextContent(
+      'Loading your folders',
+    )
+  })
+
+  it('a person without the Usage place sees no money anywhere on the page, and a session row keeps its other facts', async () => {
+    authState.can = member
+    sessions()
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([observed()]))
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue(page([]))
+    renderIntel(
+      <main>
+        <HomeView />
+      </main>,
+    )
+    const running = await screen.findByRole('region', { name: 'Running' })
+    // The row says what it did, and no slot is left where the cost stood.
+    const facts = await within(running).findByText(/2 tool calls/)
+    expect(facts).toHaveTextContent(/^· 2 tool calls$/)
+    const main = screen.getByRole('main')
+    expect(main).not.toHaveTextContent('$')
+    // Nor on a hover title or a name read aloud.
+    expect(main.innerHTML).not.toMatch(/\$\s?\d/)
+  })
+
+  it('a person without the Usage place meets no Today strip: the sections below tell the work', async () => {
+    authState.can = member
+    sessions()
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue(page([]))
+    renderIntel(<HomeView />)
+    const running = await screen.findByRole('region', { name: 'Running' })
+    expect(within(running).getByText('Payment reminders')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Sessions at a glance' }),
+    ).toBeNull()
+  })
+
+  it('a person who can open Usage reads what each session cost on its row, as before', async () => {
+    authState.can = () => true
+    sessions()
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([observed()]))
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(page([]))
+    renderIntel(<HomeView />)
+    const running = await screen.findByRole('region', { name: 'Running' })
+    await waitFor(() =>
+      expect(running).toHaveTextContent('2 tool calls · $2.75'),
+    )
+  })
+
+  it('a person given many folders sees the eight newest above their sessions, and the rest on Show all', async () => {
+    authState.can = member
+    sessions()
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue(
+      page(
+        Array.from({ length: 10 }, (_, i) =>
+          folder({ workspace_ref: `ws-${i}`, name: `Folder ${i}` }),
+        ),
+      ),
+    )
+    renderIntel(<HomeView />)
+    const folders = await screen.findByRole('region', { name: 'Your folders' })
+    await within(folders).findByRole('button', { name: 'Start in Folder 0' })
+    expect(
+      within(folders).getAllByRole('button', { name: /^Start in / }),
+    ).toHaveLength(8)
+    expect(
+      within(folders).queryByRole('button', { name: 'Start in Folder 8' }),
+    ).toBeNull()
+    await userEvent.click(
+      within(folders).getByRole('button', { name: 'Show all folders (10)' }),
+    )
+    expect(
+      within(folders).getAllByRole('button', { name: /^Start in / }),
+    ).toHaveLength(10)
+    // The focus Show all held moves to the first folder it opened.
+    expect(
+      within(folders).getByRole('button', { name: 'Start in Folder 8' }),
+    ).toHaveFocus()
+    expect(
+      within(folders).queryByRole('button', { name: /^Show all/ }),
+    ).toBeNull()
+  })
+
+  it('an administrator, who registers the folders, keeps the Overview as it is: its cost, and no folder list or read', async () => {
+    authState.can = () => true
+    sessions()
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(page([]))
+    const list = vi.spyOn(agentOpsApi, 'listWorkspaces')
+    renderIntel(<HomeView />)
+    const strip = await screen.findByRole('navigation', {
+      name: 'Sessions at a glance',
+    })
+    await waitFor(() => expect(strip).toHaveTextContent('$1.42 today'))
+    expect(screen.queryByRole('region', { name: 'Your folders' })).toBeNull()
+    expect(list).not.toHaveBeenCalled()
   })
 })

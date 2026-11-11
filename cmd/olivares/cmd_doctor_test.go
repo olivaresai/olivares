@@ -437,6 +437,44 @@ func TestDoctorAgentOpsDropinDriftAndAbsentWorkspaceAreMeasuredDefects(t *testin
 	}
 }
 
+// A container runs on its host's kernel, so "use a Linux engine host" is advice nobody in Docker
+// Desktop can follow: the kernel is the Linux VM's, which Docker owns. Doctor says whose kernel decides
+// and what keeps working; on a plain host the advice is unchanged.
+func TestDoctorSessionConfinementInContainerNamesTheHostKernel(t *testing.T) {
+	none := func() confine.State { return confine.State{Mode: confine.ModeNone, Reason: "no Landlock"} }
+	for _, tc := range []struct {
+		name        string
+		inContainer bool
+		want, deny  string
+	}{
+		{"container", true, "Docker Desktop", "use a Linux engine host"},
+		{"host", false, "use a Linux engine host", "Docker Desktop"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			marker := filepath.Join(t.TempDir(), "containerenv")
+			if tc.inContainer {
+				if err := os.WriteFile(marker, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			saved := containerMarkers
+			containerMarkers = []string{marker}
+			t.Cleanup(func() { containerMarkers = saved })
+			t.Setenv("KUBERNETES_SERVICE_HOST", "")
+			o, deps := doctorFixture(t)
+			deps.goos, deps.confinement = "linux", none
+			report, _, err := runDoctor(t.Context(), o, deps)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check := doctorCheckByName(report, "session-confinement")
+			if check.Status != "fail" || !strings.Contains(check.Remediation, tc.want) || strings.Contains(check.Remediation, tc.deny) {
+				t.Fatalf("session-confinement remediation = %q, want it to contain %q and not %q", check.Remediation, tc.want, tc.deny)
+			}
+		})
+	}
+}
+
 // Landlock is a Linux kernel feature. Without it a Linux host still fails doctor;
 // on another OS its absence is a named limit (warn) and leaves the verdict alone.
 func TestDoctorSessionConfinementWithoutLandlockFailsOnlyOnLinux(t *testing.T) {

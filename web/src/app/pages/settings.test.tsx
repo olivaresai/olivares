@@ -41,14 +41,11 @@ const auth = vi.hoisted(() => ({
   denied: new Set<string>(),
   isSuperadmin: true,
 }))
-const location = vi.hoisted(() => ({ search: undefined as string | undefined }))
-const router = vi.hoisted(() => ({ navigate: vi.fn() }))
-vi.mock('@tanstack/react-router', async () => ({
-  useNavigate: () => router.navigate,
-  useRouter: () => undefined,
-  useRouterState: () => location.search,
-  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
-}))
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+import { fakeRouter } from '@/test/fake-router'
+import { SettingsSectionNavigation } from '@/components/layout/settings-section-navigation'
 
 // Setup is a room with its own tests; here it only has to open INSIDE Settings.
 vi.mock('@/features/onboarding/index', () => ({
@@ -84,7 +81,15 @@ vi.mock('@/lib/hooks/use-server-info', () => ({
   }),
 }))
 
-import { SettingsPage } from './settings'
+import { SettingsPage as SettingsContent } from './settings'
+function SettingsPage() {
+  return (
+    <>
+      <SettingsSectionNavigation />
+      <SettingsContent />
+    </>
+  )
+}
 
 // Deployment is a Business page; only a Business build registers it.
 const businessDeploy = FEATURE_VIEWS.some((view) => view.id === 'deploy')
@@ -92,8 +97,7 @@ const businessDeploy = FEATURE_VIEWS.some((view) => view.id === 'deploy')
 beforeEach(async () => {
   badgeFixture.edition = null
   vi.restoreAllMocks()
-  router.navigate.mockClear()
-  location.search = undefined
+  fakeRouter.reset('/settings')
   server.license = { status: 'none', licensee: '' }
   auth.denied.clear()
   auth.isSuperadmin = true
@@ -139,7 +143,7 @@ beforeEach(async () => {
 
 describe('Settings', () => {
   it('opens the shared license status and actions as Settings › Edition, with the Settings list beside it', async () => {
-    location.search = '?section=edition'
+    fakeRouter.reset('/settings' + '?section=edition')
     render(<SettingsPage />)
     expect(
       await screen.findByText('Settings License Owner'),
@@ -158,7 +162,7 @@ describe('Settings', () => {
   })
 
   it('shows the module switches in Settings › Modules and none in Settings › Edition', async () => {
-    location.search = '?section=modules'
+    fakeRouter.reset('/settings' + '?section=modules')
     const { unmount } = render(<SettingsPage />)
     expect(
       screen.getByRole('heading', { level: 1, name: 'Modules' }),
@@ -172,7 +176,7 @@ describe('Settings', () => {
     ).toHaveAttribute('aria-current', 'page')
     unmount()
 
-    location.search = '?section=edition'
+    fakeRouter.reset('/settings' + '?section=edition')
     render(<SettingsPage />)
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Edition' }),
@@ -192,7 +196,7 @@ describe('Settings', () => {
       seat_limited: false,
       active_users: 7,
     })
-    location.search = '?section=edition'
+    fakeRouter.reset('/settings' + '?section=edition')
     render(<SettingsPage />)
     expect(
       await screen.findByRole('heading', { level: 2, name: 'License' }),
@@ -219,12 +223,15 @@ describe('Settings', () => {
     ])
       expect(within(list).queryByRole('button', { name })).toBeNull()
     // No row of the list leaves /settings.
-    expect(within(list).queryAllByRole('link')).toHaveLength(0)
+    expect(within(list).getByRole('link', { name: 'Vault' })).toHaveAttribute(
+      'href',
+      '/vault',
+    )
   })
 
   it('keeps the license superadmin gate in Settings', async () => {
     auth.isSuperadmin = false
-    location.search = '?section=edition'
+    fakeRouter.reset('/settings' + '?section=edition')
     render(<SettingsPage />)
     expect(
       screen.getByText(/ask a system administrator to view or change it/i),
@@ -237,7 +244,7 @@ describe('Settings', () => {
   it.each(['License', 'Edition'])(
     'finds the license section in Settings search for %s',
     async (term) => {
-      location.search = `?q=${term}`
+      fakeRouter.reset('/settings' + `?q=${term}`)
       render(<SettingsPage />)
       expect(screen.getByRole('link', { name: 'Edition' })).toHaveAttribute(
         'href',
@@ -249,7 +256,7 @@ describe('Settings', () => {
   const spanishEditionLabel = 'Edición' // language-data: Spanish expected label
   it('finds the license section in Settings search without diacritics in Spanish', async () => {
     await i18n.changeLanguage('es')
-    location.search = '?q=edicion'
+    fakeRouter.reset('/settings' + '?q=edicion')
     render(<SettingsPage />)
     expect(
       screen.getByRole('link', { name: spanishEditionLabel }),
@@ -258,18 +265,18 @@ describe('Settings', () => {
 
   it('opens a setting selected by navigation while the settings page is already mounted', async () => {
     window.history.replaceState(null, '', '/settings')
-    location.search = ''
+    fakeRouter.reset('/settings' + '')
     const view = render(<SettingsPage />)
     expect(
       screen.getByRole('radiogroup', { name: 'Theme' }),
     ).toBeInTheDocument()
-    location.search = '?section=keyboard'
+    fakeRouter.reset('/settings' + '?section=keyboard')
     view.rerender(<SettingsPage />)
     expect(screen.getByText('New session')).toBeInTheDocument()
     expect(
       screen.queryByRole('radiogroup', { name: 'Theme' }),
     ).not.toBeInTheDocument()
-    location.search = ''
+    fakeRouter.reset('/settings' + '')
     view.rerender(<SettingsPage />)
     expect(
       screen.getByRole('radiogroup', { name: 'Theme' }),
@@ -476,16 +483,18 @@ describe('Settings', () => {
     ).not.toBeInTheDocument()
   })
 
-  // the regression: the search input drops its own outline, so its field draws the 3 px focus ring.
+  // the regression: the search input drops its own outline, so its field draws the 2 px focus
+  // ring, inside its boundary as every field's ring is (A2's focus rule: offset -2 px).
   it('rings the search field in the focus color while the search has keyboard focus', async () => {
     const user = userEvent.setup()
     render(<SettingsPage />)
     await user.keyboard('/')
-    const field = screen.getByRole('searchbox').closest('label')
+    const field = screen.getByRole('searchbox')
+    expect(field).toHaveFocus()
     expect(field).toHaveClass(
-      'has-focus-visible:outline-3',
-      'has-focus-visible:outline-offset-2',
-      'has-focus-visible:outline-focus',
+      'focus-visible:outline-2',
+      'focus-visible:-outline-offset-2',
+      'focus-visible:outline-focus',
     )
   })
 
@@ -531,6 +540,24 @@ describe('Settings', () => {
     expect(
       screen.queryByRole('button', { name: /Changed · reset/ }),
     ).not.toBeInTheDocument()
+  })
+
+  it('lets the person choose the send key and what it does while the tool works', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    await user.click(screen.getByRole('radio', { name: 'Ctrl+Enter' }))
+    await user.click(screen.getByRole('radio', { name: 'Steer the turn' }))
+    expect(useClientSettings.getState()).toMatchObject({
+      sendKey: 'modEnter',
+      sendWhileRunning: 'steer',
+    })
+    await user.click(
+      screen.getByRole('button', { name: 'Restore all defaults' }),
+    )
+    expect(useClientSettings.getState()).toMatchObject({
+      sendKey: 'enter',
+      sendWhileRunning: 'queue',
+    })
   })
 
   it('restores every default from the top of the page', async () => {
@@ -603,7 +630,7 @@ describe('Settings', () => {
 
   it('names the edition once, and on Community lists what a Business build adds', async () => {
     // Settings › Edition opens this address.
-    location.search = '?section=edition'
+    fakeRouter.reset('/settings' + '?section=edition')
     server.edition = 'community'
     const { unmount } = render(<SettingsPage />)
     expect(
@@ -611,7 +638,9 @@ describe('Settings', () => {
     ).toBeInTheDocument()
     expect(await screen.findByText('Community')).toBeInTheDocument()
     // The list quotes the summary in docs/editions.md, not a console catalogue.
-    const adds = screen.getByRole('heading', { name: 'Business adds' })
+    const adds = screen.getByRole('heading', {
+      name: 'Olivares AI Business adds',
+    })
     const items = adds.parentElement?.querySelectorAll('li') ?? []
     expect([...items].map((li) => li.textContent)).toEqual(
       __EDITION_SUMMARIES__.business,
@@ -627,7 +656,9 @@ describe('Settings', () => {
     server.edition = 'enterprise'
     render(<SettingsPage />)
     expect(await screen.findByText('Business')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Business adds' })).toBeNull()
+    expect(
+      screen.queryByRole('heading', { name: 'Olivares AI Business adds' }),
+    ).toBeNull()
     server.edition = 'community'
   })
 
@@ -671,7 +702,7 @@ describe('Settings', () => {
   )
 
   it('opens ?section=setup on load, with its row marked current', async () => {
-    location.search = '?section=setup'
+    fakeRouter.reset('/settings' + '?section=setup')
     render(<SettingsPage />)
     expect(
       await screen.findByRole('region', { name: 'Setup wizard' }),
@@ -684,7 +715,7 @@ describe('Settings', () => {
 
   it('offers Setup only where its page opens, and an address to it otherwise says it is for a system administrator, not General', () => {
     auth.denied.add('system:admin')
-    location.search = '?section=setup'
+    fakeRouter.reset('/settings' + '?section=setup')
     render(<SettingsPage />)
     expect(screen.queryByRole('button', { name: 'Setup' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Setup wizard' })).toBeNull()
@@ -705,13 +736,13 @@ describe('Settings', () => {
   })
 
   it('shows search results, not the hosted section, while the search holds a query', async () => {
-    location.search = '?section=setup&q=theme'
+    fakeRouter.reset('/settings' + '?section=setup&q=theme')
     const view = render(<SettingsPage />)
     expect(
       await screen.findByRole('radiogroup', { name: 'Theme' }),
     ).toBeVisible()
     expect(screen.queryByRole('region', { name: 'Setup wizard' })).toBeNull()
-    location.search = '?section=setup'
+    fakeRouter.reset('/settings' + '?section=setup')
     view.rerender(<SettingsPage />)
     expect(
       await screen.findByRole('region', { name: 'Setup wizard' }),
@@ -759,9 +790,9 @@ vi.mock('@/features/console/use-edition-badge', () => ({
 
 it('shows the active commercial badge and one visibility setting in Edition', async () => {
   badgeFixture.edition = 'enterprise'
-  location.search = '?section=edition'
+  fakeRouter.reset('/settings' + '?section=edition')
   render(<SettingsPage />)
-  expect(screen.getByLabelText('Enterprise edition')).toBeInTheDocument()
+  expect(screen.getByLabelText('Olivares AI Enterprise')).toBeInTheDocument()
   expect(
     screen.getByRole('switch', { name: 'Show edition badge' }),
   ).toBeChecked()
@@ -801,7 +832,7 @@ describe('Settings > section list', () => {
   })
 
   it('opens Session idle from its address for an administrator', () => {
-    location.search = '?section=sessionIdle'
+    fakeRouter.reset('/settings' + '?section=sessionIdle')
     render(<SettingsPage />)
     expect(
       screen.getByRole('region', { name: 'Session idle panel' }),
@@ -815,7 +846,7 @@ describe('Settings > section list', () => {
     'says the address of %s is for a system administrator, not General, when the person is not one',
     (id) => {
       auth.isSuperadmin = false
-      location.search = `?section=${id}`
+      fakeRouter.reset('/settings' + `?section=${id}`)
       render(<SettingsPage />)
       expect(
         screen.getByRole('heading', {
@@ -836,7 +867,7 @@ describe('Settings > section list', () => {
   it.each(['sessionDefaults', 'nothing-here'])(
     'opens General for the unknown address ?section=%s',
     (id) => {
-      location.search = `?section=${id}`
+      fakeRouter.reset('/settings' + `?section=${id}`)
       render(<SettingsPage />)
       expect(
         screen.getByRole('heading', {

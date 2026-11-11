@@ -57,6 +57,7 @@ import type {
   RunMessagesParams,
   RunDTO,
   TerminalDTO,
+  TerminalListDTO,
   RunMarkDTO,
   RunPinDTO,
   RunQueueDTO,
@@ -419,18 +420,26 @@ export const agentOpsApi = {
       signal: opts?.signal,
     }),
   /** One changed file's current text (at most 256 KiB), or with `rev: 'HEAD'` the text
-   * git HEAD holds for it (404: no readable repository, or the file is not in HEAD). */
+   * git HEAD holds for it (404: no readable repository, or the file is not in HEAD).
+   * `turn` and `side` read its start, end, or current folder; an absent file is empty. */
   changedFile: (
     r: string,
     path: string,
-    opts?: { signal?: AbortSignal; rev?: 'HEAD' },
+    opts?: {
+      signal?: AbortSignal
+      rev?: 'HEAD'
+      turn?: number
+      side?: 'start' | 'end' | 'current'
+    },
   ) =>
     http.get<RunChangedFileDTO>(`${RUNS}/${ref(r)}/changes/file`, {
-      query: { path, rev: opts?.rev },
+      query: { path, rev: opts?.rev, turn: opts?.turn, side: opts?.side },
       signal: opts?.signal,
     }),
   /** What the session's worktree branch changed since it left the workspace's current
-   * commit (committed work only, read-only). 404 for a session without a worktree. */
+   * commit (committed work only, read-only), or for a session that works in its Git
+   * folder directly, that folder's uncommitted changes against its last commit (409 while
+   * the folder has no commit yet). 404 for a session with neither. */
   worktreeDiff: (r: string, opts?: { signal?: AbortSignal }) =>
     http.get<RunWorktreeDiffDTO>(`${RUNS}/${ref(r)}/diff`, {
       signal: opts?.signal,
@@ -451,7 +460,8 @@ export const agentOpsApi = {
       { to },
       options,
     ),
-  /** One path of that branch at the base and at the branch tip (at most 64 KiB each). */
+  /** One path of that branch at the base and at the branch tip (at most 64 KiB each); for
+   * a folder session, at its last commit and as it is now (the workspace's read limit). */
   worktreeDiffFile: (
     r: string,
     path: string,
@@ -805,6 +815,11 @@ export const agentOpsApi = {
     size: { rows: number; cols: number },
     opts?: Pick<RequestOptions, 'tenant' | 'signal'>,
   ) => http.post<TerminalDTO>(`${WORKSPACES}/${ref(r)}/terminals`, size, opts),
+  /** The person's own open terminals in the folder, for a browser that lost their ids. */
+  listTerminals: (
+    r: string,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal'>,
+  ) => http.get<TerminalListDTO>(`${WORKSPACES}/${ref(r)}/terminals`, opts),
   terminalInput: (r: string, id: string, data: string) =>
     http.post<Record<string, never>>(
       `${WORKSPACES}/${ref(r)}/terminals/${ref(id)}/input`,

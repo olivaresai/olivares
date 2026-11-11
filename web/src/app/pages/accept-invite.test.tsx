@@ -247,3 +247,60 @@ describe('AcceptInvitePage: a request that gets no answer', () => {
     expect(alert).toHaveTextContent('Control plane unreachable')
   })
 })
+
+// The page as drawn: the lockup, then ONE sheet holding the title, the line
+// under it, the two password fields and the one filled button; a refused or an
+// incomplete link is a notice inside that sheet.
+describe('AcceptInvitePage as drawn', () => {
+  const sheetOf = (node: Element) => node.closest('[data-slot="auth-sheet"]')
+
+  it('holds the one h1, the form and its one filled button in one sheet', () => {
+    setUrl('#token=olvi_sel_secret')
+    render(<AcceptInvitePage />, { wrapper: Wrapper })
+    const headings = screen.getAllByRole('heading', { level: 1 })
+    expect(headings).toHaveLength(1)
+    const sheets = document.querySelectorAll('[data-slot="auth-sheet"]')
+    expect(sheets).toHaveLength(1)
+    const sheet = sheetOf(headings[0])
+    expect(sheet).not.toBeNull()
+    expect(sheet).toContainElement(screen.getByLabelText(/new password/i))
+    expect(sheet).toContainElement(screen.getByLabelText(/confirm password/i))
+    const submit = screen.getByRole('button', { name: /activate account/i })
+    const filled = sheet!.querySelectorAll('.bg-accent')
+    expect(filled).toHaveLength(1)
+    expect(filled[0]).toBe(submit)
+    expect(submit).toHaveClass('w-full')
+    const back = screen.getByRole('link', { name: /go to sign in/i })
+    expect(back).not.toHaveClass('bg-accent')
+  })
+
+  it('says a refused invitation in a notice inside the sheet', async () => {
+    setUrl('#token=olvi_sel_secret')
+    mockAcceptInvite.mockRejectedValue(
+      new ApiError(400, 'invite_invalid', 'invite invalid'),
+    )
+    const user = userEvent.setup()
+    render(<AcceptInvitePage />, { wrapper: Wrapper })
+    await user.type(screen.getByLabelText(/new password/i), 'long-enough-pass')
+    await user.type(
+      screen.getByLabelText(/confirm password/i),
+      'long-enough-pass',
+    )
+    await user.click(screen.getByRole('button', { name: /activate account/i }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/not valid/i)
+    expect(alert).toHaveAttribute('data-slot', 'notice')
+    expect(alert).toHaveAttribute('data-tone', 'bad')
+    expect(sheetOf(alert)).not.toBeNull()
+  })
+
+  it('says an incomplete link in a notice inside the sheet', () => {
+    setUrl('')
+    render(<AcceptInvitePage />, { wrapper: Wrapper })
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(/incomplete/i)
+    expect(alert).toHaveAttribute('data-slot', 'notice')
+    expect(sheetOf(alert)).not.toBeNull()
+    expect(document.querySelectorAll('.bg-accent')).toHaveLength(0)
+  })
+})

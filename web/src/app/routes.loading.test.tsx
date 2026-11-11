@@ -72,6 +72,7 @@ vi.mock('@/components/layout/app-frame', () => ({
 vi.mock('@/components/layout/sidebar', () => ({
   Sidebar: () => null,
   NavigationDrawer: () => null,
+  PhoneNavigation: () => null,
 }))
 vi.mock('@/components/layout/topbar', () => ({ Topbar: () => null }))
 vi.mock('@/components/layout/command-menu', () => ({ CommandMenu: () => null }))

@@ -84,6 +84,7 @@
     "notReady": "{{tool}} ne peut pas encore démarrer.",
     "folder": "Dossier",
     "folderHint": "Un dossier sur ce serveur.",
+    "folderHintGiven": "Le chemin d’un dossier déjà enregistré sur ce serveur. Un administrateur enregistre les nouveaux.",
     "folderChoose": "Choisir un dossier",
     "folderNew": "Un nouveau dossier pour cette session",
     "folderTyped": "Un autre dossier…",
@@ -111,6 +112,7 @@
     "credentialsManage": "Gérer les identifiants gérés",
     "listUnavailable": "Le moteur n'a pas répondu à la liste des secrets. Rien ne peut être choisi pour l'instant.",
     "openTools": "Ouvrir Outils d’IA",
+    "askAdmin": "Demandez à un administrateur de le préparer.",
     "model": "Modèle",
     "providerDefault": "Par défaut ({{model}})",
     "nativeDefault": "Par défaut de {{tool}}",
@@ -123,14 +125,21 @@
     "profileNeedsKey": "Clé requise",
     "foldersUnreadable": "Les dossiers enregistrés n'ont pas pu être lus. Saisissez le chemin d'un dossier de ce serveur.",
     "folderPermission": "Démarre en {{name}}, la valeur par défaut de ce dossier.",
-    "autoAsks": "{{tool}} n’a pas de mode automatique : il demandera avant chaque action."
+    "autoAsks": "{{tool}} n’a pas de mode automatique : il demandera avant chaque action.",
+    "worktreeCheckout": "Checkout actuel",
+    "worktreeNew": "Nouveau worktree",
+    "worktreeFrom": "Partir de",
+    "worktreeFromHint": "Branche ou commit (facultatif)",
+    "worktreeNewHint": "La session travaille sur une branche à elle, dans un dossier séparé. Le checkout reste tel quel.",
+    "worktreeLegend": "Copie de travail"
   },
   "composer": {
     "toolPill": "Outil et compte : {{value}}",
     "modelPill": "Modèle : {{value}}",
     "effortPill": "Effort : {{value}}",
     "folderPill": "Dossier : {{value}}",
-    "moreOptions": "Plus d’options"
+    "moreOptions": "Plus d’options",
+    "worktreePill": "Copie de travail : {{value}}"
   },
   "lists": {
     "foldersTruncated": "Dossiers enregistrés : {{count}} chargés ; il y en a d’autres.",

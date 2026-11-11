@@ -304,6 +304,9 @@ func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRe
 	if err := validateRuntimeInputTarget(request.Target); err != nil {
 		return refused, err
 	}
+	if err := m.refuseAnotherPersonsInput(ctx, request); err != nil {
+		return refused, err
+	}
 	request.Raw = bytes.Clone(request.Raw)
 	if request.Target.Work != nil {
 		work := *request.Target.Work
@@ -515,6 +518,9 @@ func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request Runtime
 	if err := validateRuntimeInputTarget(request.Target); err != nil {
 		return refused, err
 	}
+	if err := m.refuseAnotherPersonsInput(ctx, request); err != nil {
+		return refused, err
+	}
 	switch request.Mode {
 	case RuntimeInputText:
 		if len(request.Raw) != 0 || strings.TrimSpace(request.Text) == "" || !boundedText(request.Text, 1, maxWorkTextInputBytes) {
@@ -647,7 +653,7 @@ func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request Runtime
 	if request.Mode == RuntimeInputText {
 		attempted, err = m.driverInputAdmitted(ctx, live, request.Text, request.Target.ExpectedLaunch, request.Target.ExpectedSID)
 	} else {
-		attempted, err = m.sendInputAdmitted(ctx, live, request.Raw, request.Target.ExpectedLaunch, request.Target.ExpectedSID)
+		attempted, err = m.sendInputAdmitted(ctx, live, request.Raw, request.Target.ExpectedLaunch, request.Target.ExpectedSID, rec)
 	}
 	if attempted && err == nil {
 		err = runtimeInputDeadline(ctx, deadline)

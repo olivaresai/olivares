@@ -370,18 +370,27 @@
       "placeholder": "Entrar pone el mensaje en cola para después de este turno",
       "placeholderSteer": "Entrar lo pone en cola para después de este turno, Ctrl+Entrar lo redirige ahora",
       "discarded": "La sesión se liberó con estos mensajes aún en cola:",
-      "copy": "Copiar"
-    }
+      "copy": "Copiar",
+      "placeholderQueueKey": "{{key}} pone un mensaje en cola para después de este turno",
+      "placeholderSteerKey": "{{key}} lo redirige ahora"
+    },
+    "stash": "Apartar este borrador",
+    "stashRestore": "Recuperar el borrador apartado",
+    "plan": "Plan",
+    "planHint": "Planificar primero: la herramienta lee y propone un plan, y no cambia nada. Se aplica desde el próximo mensaje."
   },
   "shell": {
     "more": "Más",
     "searchCommands": "Buscar y comandos",
     "search": "Buscar",
+    "searchGo": "Buscar o ir a…",
     "stopAll": "Detener todo",
     "workspaceCount": "Espacios de trabajo: {{count}}",
     "rail": {
       "title": "Sesiones",
-      "all": "Todas",
+      "seeAll_one": "Ver {{count}} sesión",
+      "seeAll_many": "Ver las {{count}} sesiones",
+      "seeAll_other": "Ver las {{count}} sesiones",
       "groups": {
         "needsYou": "Te necesita",
         "working": "En marcha",
@@ -431,10 +440,10 @@
     "killswitch": {
       "estateStopped": "TODOS LOS AGENTES PARADOS",
       "estateBody": "Los agentes no pueden actuar hasta que dos cuentas de usuario aprueben volver a arrancar.",
-      "agentStops": "{{count}} parada de agente activa",
-      "agentStops_one": "{{count}} parada de agente activa",
-      "agentStops_many": "{{count}} paradas de agente activas",
-      "agentStops_other": "{{count}} paradas de agente activas",
+      "agentStops": "{{count}} agentes detenidos",
+      "agentStops_one": "{{count}} agente detenido",
+      "agentStops_many": "{{count}} agentes detenidos",
+      "agentStops_other": "{{count}} agentes detenidos",
       "none": "No hay nada parado. Las sesiones y los agentes funcionan con normalidad."
     },
     "status": {
@@ -442,6 +451,9 @@
       "running_one": "{{count}} sesión abierta",
       "running_many": "{{count}} sesiones abiertas",
       "running_other": "{{count}} sesiones abiertas",
+      "needYou_one": "{{count}} te necesita",
+      "needYou_many": "{{count}} te necesitan",
+      "needYou_other": "{{count}} te necesitan",
       "usage": "Uso de {{tool}}",
       "fiveHour": "5 h",
       "week": "sem.",
@@ -452,7 +464,6 @@
     },
     "collapse": "Contraer la navegación",
     "expand": "Expandir la navegación",
-    "openNavigation": "Abrir la navegación",
     "closeNavigation": "Cerrar la navegación"
   },
   "places": {
@@ -478,6 +489,10 @@
     "securityRedTeam": "Ejecuciones y puntuación de red team",
     "operationsDeploy": "Desplegar agentes en otros hosts",
     "operationsResidency": "Residencia de datos e inquilinos",
-    "retentionSchedules": "Los calendarios solo se aplican en Olivares Business: esta edición los conserva y no purga nada."
+    "retentionSchedules": "Los calendarios solo se aplican en Olivares AI Business: esta edición los conserva y no purga nada."
+  },
+  "groups": {
+    "control": "Gobierno",
+    "admin": "Administración"
   }
 }

@@ -25,13 +25,13 @@ import type {
 const ROLES: readonly VaultRole[] = ['viewer', 'editor', 'owner']
 const SUBJECT_KINDS: readonly VaultSubjectKind[] = ['user', 'group']
 const SELECT_CLASS =
-  'h-9 rounded-md border border-input bg-background px-3 text-body text-foreground'
+  'h-9 rounded-md border border-ctl-border bg-background px-3 text-body text-foreground'
 
 /**
  * VaultsView lists the shared vaults the caller can see, creates one, and opens a
  * vault's share panel. Read gates on governance:vault:read; create, share and revoke
- * on governance:vault:write. Community answers 501 business_required, which shows the
- * Business notice in place of the list.
+ * on governance:vault:write. Community refuses them by edition (501), which shows the
+ * edition line in place of the list.
  */
 export function VaultsView() {
   const { activeTenant } = useAuth()

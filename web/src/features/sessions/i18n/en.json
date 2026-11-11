@@ -58,7 +58,9 @@
     "truncated": "Showing the first 200 files or branches. Refresh after narrowing the changes.",
     "fileStatus": "Index: {{index}}; working tree: {{worktree}}",
     "commitHint": "Only staged changes are committed, using your profile’s name and email.",
-    "working": "Working…"
+    "working": "Working…",
+    "nothingStaged": "Nothing is staged yet. Stage a file to commit it.",
+    "noMessage": "Write a commit message."
   },
   "title": "Sessions",
   "refresh": "Refresh",
@@ -620,10 +622,18 @@
       "todos": "Todo list ({{done}} of {{total}} done)",
       "send": "Send answer",
       "answered": "Answer sent: {{answer}}",
-      "sendFailed": "The answer could not be sent."
-    }
+      "sendFailed": "The answer could not be sent.",
+      "implement": "Implement",
+      "implementText": "Implement the plan."
+    },
+    "cite": "Cite in composer"
   },
   "changes": {
+    "scope": "Changes scope",
+    "session": "Since session started",
+    "latest": "Latest turn",
+    "before": "Before",
+    "after": "After",
     "title": "Changes in {{folder}}",
     "titleNoFolder": "Changes",
     "hint": "Files the agent changed in its folder since this session started.",
@@ -710,6 +720,16 @@
       "empty": "Write the comment.",
       "atBase": "at the base",
       "atTip": "at the branch tip"
+    },
+    "folder": {
+      "title": "Uncommitted changes",
+      "since": "Since the last commit on <branch />.",
+      "sinceCommit": "Since the last commit ({{base}}).",
+      "empty": "No changes since the last commit.",
+      "noCommit": "This folder has no commit yet, so there is nothing to compare with.",
+      "original": "At the last commit",
+      "modified": "In the folder",
+      "fileTruncated": "Showing only the beginning of each side."
     }
   },
   "peers": {
@@ -899,11 +919,14 @@
     "scriptsFailed": "Could not read project scripts.",
     "stopScript": "Stop",
     "title": "Terminal",
+    "maximize": "Maximize terminal",
+    "restore": "Restore terminal size",
     "hint": "A shell in this session's folder, inside the same limits as the session. It runs as you; each command line you type is recorded.",
     "open": "Open terminal",
-    "close": "Close",
     "copy": "Copy",
     "paste": "Paste",
+    "selectAll": "Select all",
+    "jumpToLatest": "Jump to latest",
     "again": "Open a new terminal",
     "reconnecting": "Reconnecting…",
     "ended": "The terminal ended.",
@@ -916,7 +939,8 @@
       "step_up": "Confirm your identity first, then open the terminal again.",
       "refused": "You do not have the right to open a terminal in this folder.",
       "busy": "You have too many terminals open. Close one first.",
-      "failed": "The terminal could not be opened. Try again in a moment."
+      "failed": "The terminal could not be opened. Try again in a moment.",
+      "unsafe": "This command was not run: it holds control or hidden characters that could act as keystrokes."
     },
     "keys": {
       "esc": "Esc",
@@ -925,7 +949,27 @@
       "up": "Up",
       "down": "Down"
     },
-    "closeLabel": "Close terminal"
+    "starting": "Starting…",
+    "list": "Terminals",
+    "new": "New terminal",
+    "split": "Split",
+    "unsplit": "Close split",
+    "search": "Search",
+    "actions": "Terminal actions",
+    "searchLabel": "Search the terminal",
+    "searchPrevious": "Previous match",
+    "searchNext": "Next match",
+    "rename": "Rename terminal",
+    "renameHint": "Double-click to rename",
+    "closeNamed": "Close {{name}}",
+    "closeTitle": "Close {{name}}?",
+    "closeBody": "This ends the shell and everything it started.",
+    "closeConfirm": "Close terminal",
+    "sendToAgent": "Send to agent",
+    "sendToAgentHint": "Put the selected output in your message, where you can edit it before sending.",
+    "contextLabel": "Output of {{name}}:",
+    "drawer": "Terminal drawer",
+    "runInTerminal": "Run in terminal"
   },
   "strip": {
     "needYou_one": "{{count}} needs you",

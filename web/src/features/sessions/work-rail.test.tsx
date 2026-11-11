@@ -1100,6 +1100,7 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
     // The mark is the engine's (GET /v1/m/sessions/tools), never a console guess:
     // Codex was C on AI tools and CO here.
     const codex = engineTools.tools.find((tool) => tool.key === 'codex')!
+    expect(codex.vendor).toBe('openai')
     rail(launched({ provider_driver: 'codex' }))
     const listed = screen.getByTestId('tool-mark')
     render(
@@ -1111,8 +1112,8 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
       'tool-mark',
     )
     for (const mark of [listed, boxed]) {
-      expect(mark).toHaveTextContent(new RegExp(`^${codex.monogram}$`))
-      expect(mark).toHaveStyle({ backgroundColor: codex.color })
+      expect(mark).toHaveAttribute('data-vendor', codex.vendor)
+      expect(mark).not.toHaveTextContent(codex.monogram)
     }
   })
 

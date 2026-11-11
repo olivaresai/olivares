@@ -31,6 +31,14 @@ vi.mock('@tanstack/react-router', async () => {
   return fakeRouterModule()
 })
 
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
+
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
@@ -44,6 +52,7 @@ vi.mock('./api', async (importOriginal) => ({
   inferenceProxyApi: api,
 }))
 
+import { ApiError } from '@/lib/api/errors'
 import { InferenceProxyView } from './inference-proxy-view'
 
 const config = {
@@ -441,6 +450,60 @@ describe('InferenceProxyView', () => {
         deny: true,
       }),
     )
+  })
+})
+
+// A WRITE REFUSED BY EDITION is the calm edition line, never «not authorized»: an edition
+// is not a role. A role's refusal keeps its own words.
+describe('InferenceProxyView — a write refused by edition', () => {
+  const byEdition = () =>
+    new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+      edition: 'engineer',
+      capability: 'inferenceproxy',
+    })
+
+  async function saysTheEditionLine() {
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Engineer.')
+    expect(container.textContent).not.toMatch(/raw: 403|edition_required/)
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  }
+
+  async function deleteTheRule() {
+    const user = userEvent.setup()
+    wrap(<InferenceProxyView />)
+    await user.click(
+      await screen.findByRole('button', { name: /delete rule for pii/i }),
+    )
+    const confirm = await screen.findByRole('dialog')
+    await user.click(
+      within(confirm).getByRole('button', { name: /delete rule/i }),
+    )
+  }
+
+  it('deleting a DLP rule says the edition line and closes the confirm', async () => {
+    api.deleteDLPRule.mockRejectedValue(byEdition())
+    await deleteTheRule()
+    await saysTheEditionLine()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('a device decision says the edition line', async () => {
+    api.approveDevice.mockRejectedValue(byEdition())
+    const user = userEvent.setup()
+    wrap(<InferenceProxyView />)
+    await user.type(await screen.findByLabelText(/user code/i), 'ABCD')
+    await user.click(screen.getByRole('button', { name: /^approve$/i }))
+    await saysTheEditionLine()
+  })
+
+  it('a role’s refusal keeps «not authorized»', async () => {
+    api.deleteDLPRule.mockRejectedValue(new ApiError(403, 'forbidden', 'no'))
+    await deleteTheRule()
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledOnce())
+    expect(toast.info).not.toHaveBeenCalled()
   })
 })
 

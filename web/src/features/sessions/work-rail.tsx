@@ -549,6 +549,7 @@ export function WorkRail({
     if (error) return <QueryErrorState error={error} retry={onRetry} />
     return (
       <EmptyState
+        size="panel"
         icon={<SquareTerminal />}
         title={t('empty.title')}
         description={t('empty.description')}

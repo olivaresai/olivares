@@ -10,6 +10,19 @@
     "unavailableDescription": "Der Sitzungs-Lesevorgang hat nicht geantwortet. Die Kennzahlen oben sind davon nicht betroffen.",
     "untitled": "Unbenannte Sitzung"
   },
+  "folders": {
+    "title": "Ihre Ordner",
+    "start": "Starten",
+    "startIn": "In {{folder}} starten",
+    "canWork": "Sie können arbeiten",
+    "readOnly": "Nur lesen",
+    "showAll": "Alle Ordner anzeigen ({{total}})",
+    "loading": "Ihre Ordner werden geladen",
+    "emptyTitle": "Sie haben noch keine Ordner",
+    "emptyDescription": "Sobald Ihr Administrator Ihnen Zugriff auf einen Ordner gibt, erscheint er hier.",
+    "unavailableTitle": "Ihre Ordner konnten nicht geladen werden",
+    "unavailableDescription": "Ihre Sitzungen weiter unten sind davon nicht betroffen."
+  },
   "empty": {
     "title": "Noch nichts anzuzeigen",
     "description": "Ihre Rolle gewährt keinen Lesezugriff auf ein Bestandsmodul. Bitten Sie einen Administrator um eine Lese-Gewährung, um die Übersicht zu sehen."

@@ -1,14 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen } from '@/test/intel'
+import { useQuery } from '@tanstack/react-query'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, renderIntel, screen } from '@/test/intel'
+import { http } from '@/lib/api/client'
+import { preferenceStorage } from '@/lib/preference-storage'
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import { useModulesStore } from '@/stores/modules'
 
 const auth = vi.hoisted(() => ({ isSuperadmin: false }))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ ...auth, activeTenant: 't1', can: () => true }),
+  useAuth: () => ({
+    ...auth,
+    principal: { kind: 'user', user_id: 'u-1' },
+    activeTenant: 't1',
+    can: () => true,
+  }),
 }))
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
@@ -20,6 +28,8 @@ import { ModuleGate, QueryErrorState } from './query-error-state'
 afterEach(() => {
   auth.isSuperadmin = false
   useModulesStore.getState().setOff([])
+  preferenceStorage.attach(null, {})
+  vi.unstubAllGlobals()
 })
 
 // 08b's real answers (EU/captures/refresh08b): a group forbid on agent:read, and a read
@@ -104,9 +114,17 @@ describe('QueryErrorState: one mapping from a failed read to what a panel says (
         retry={vi.fn()}
       />,
     )
-    expect(
-      screen.getByText('This edition does not include report signing.'),
-    ).toBeInTheDocument()
+    const line = screen.getByText(
+      'This edition does not include report signing.',
+    )
+    // Inside a Community page it is one row: the sentence, no heading and no mark.
+    expect(line.tagName).toBe('P')
+    expect(line).toHaveAttribute('data-slot', 'not-in-edition')
+    expect(line).toHaveAttribute('role', 'status')
+    expect(line).toHaveClass('text-body', 'text-text-2')
+    expect(line).not.toHaveClass('font-extrabold')
+    expect(line.querySelector('svg')).toBeNull()
+    expect(screen.queryByRole('heading')).toBeNull()
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
     expect(screen.queryByText('Something went wrong')).toBeNull()
   })
@@ -155,5 +173,233 @@ describe('ModuleGate: a panel that reads another module (EU18)', () => {
     expect(
       screen.getByRole('button', { name: 'New model group' }),
     ).toBeInTheDocument()
+  })
+})
+
+// THE ONE MOUNT of the edition line: every query-backed panel renders its read's error
+// through QueryErrorState, so a read the engine refuses by edition reads as one calm line
+// naming the edition whole, in place of the panel's body, through this one place.
+describe('QueryErrorState: a read refused by edition', () => {
+  // The cases below are an administrator's, who can add a license (the license tab's gate).
+  beforeEach(() => {
+    auth.isSuperadmin = true
+  })
+
+  /** A panel as the console draws one: its body, or its read's error state. */
+  function KnowledgePanel() {
+    const read = useQuery({
+      queryKey: ['knowledge-bases'],
+      queryFn: () => http.get<{ items: unknown[] }>('/v1/m/knowledge/bases'),
+    })
+    if (read.isPending) return <p>Loading</p>
+    if (read.isError)
+      return (
+        <QueryErrorState
+          error={read.error}
+          subject="knowledge bases"
+          module="knowledge"
+          retry={() => void read.refetch()}
+        />
+      )
+    return <p>Your knowledge bases</p>
+  }
+
+  /** The engine answers every read with this error envelope. */
+  function engineAnswers(status: number, error: Record<string, unknown>) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error }), {
+            status,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      ),
+    )
+  }
+
+  const RAW =
+    /\b501\b|\b403\b|business_required|edition_required|addon_requires_license|\bknowledge\b|\bsso\b/
+
+  /** What a person can meet: the text, and every attribute a browser shows or reads aloud. */
+  function expectNoRawWords() {
+    expect(document.body.textContent ?? '').not.toMatch(RAW)
+    for (const el of document.body.querySelectorAll('*'))
+      for (const name of ['title', 'aria-label', 'aria-description'])
+        expect(el.getAttribute(name) ?? '').not.toMatch(RAW)
+  }
+
+  const WAYS_ON =
+    'Add a license in Settings > Edition, or see olivares.ai/pricing.'
+
+  // The panel's module is wider than what an answer refuses: a refusal that names no
+  // capability says the unnamed line, and is told again; one that names it is told once.
+  const UNNAMED = 'This is part of Olivares AI Business.'
+
+  it.each([
+    [
+      '403 edition_required',
+      403,
+      {
+        code: 'edition_required',
+        message: 'Knowledge is part of Olivares AI Engineer.',
+        edition: 'engineer',
+        capability: 'knowledge',
+      },
+      'Knowledge is part of Olivares AI Engineer.',
+      'Olivares AI Engineer',
+    ],
+    [
+      '501 business_required, naming no edition',
+      501,
+      { code: 'business_required', message: 'requires Business' },
+      UNNAMED,
+      null,
+    ],
+    [
+      '501 business_required naming its edition, as the engine answers now',
+      501,
+      {
+        code: 'business_required',
+        message: 'requires Business',
+        edition: 'business',
+      },
+      UNNAMED,
+      null,
+    ],
+    [
+      '403 addon_requires_license naming its edition',
+      403,
+      {
+        code: 'addon_requires_license',
+        message: 'the identity add-on is required',
+        edition: 'business',
+      },
+      UNNAMED,
+      null,
+    ],
+    [
+      '501 departments_unavailable, an older code that names its edition',
+      501,
+      {
+        code: 'departments_unavailable',
+        message: 'departments are not available',
+        edition: 'business',
+      },
+      UNNAMED,
+      null,
+    ],
+  ])(
+    '%s: one line in place of the body, never naming the panel for it',
+    async (_, status, error, lead, tag) => {
+      engineAnswers(status, error)
+      renderIntel(<KnowledgePanel />)
+      const line = await screen.findByText(lead, { exact: false })
+      expect(line.closest('[role="status"]')).toHaveTextContent(
+        `${lead} ${WAYS_ON}`,
+      )
+      expect(screen.getAllByRole('status')).toHaveLength(1)
+      expect(screen.queryByText('Your knowledge bases')).toBeNull()
+      expect(screen.queryByText(/You do not have access/)).toBeNull()
+      expect(screen.queryByText(/does not include/)).toBeNull()
+      expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+      expectNoRawWords()
+
+      cleanup()
+      renderIntel(<KnowledgePanel />)
+      if (tag) {
+        expect(await screen.findByText(tag)).toBeInTheDocument()
+        expect(screen.queryByText(/is part of|Add a license/)).toBeNull()
+      } else {
+        expect(
+          await screen.findByText(lead, { exact: false }),
+        ).toBeInTheDocument()
+      }
+      expect(screen.queryByText('Your knowledge bases')).toBeNull()
+      expect(screen.queryByText(/You do not have access/)).toBeNull()
+      expectNoRawWords()
+    },
+  )
+
+  // Whoever cannot add a license (the license tab's own gate) is never sent to a place they
+  // cannot use: the line asks them to ask an administrator, with no link.
+  it('a member is told to ask an administrator, with no way to a place they cannot use', async () => {
+    auth.isSuperadmin = false
+    engineAnswers(403, {
+      code: 'edition_required',
+      message: 'Knowledge is part of Olivares AI Engineer.',
+      edition: 'engineer',
+      capability: 'knowledge',
+    })
+    renderIntel(<KnowledgePanel />)
+    const line = await screen.findByText(/Knowledge is part of/)
+    expect(line.closest('[role="status"]')).toHaveTextContent(
+      'Knowledge is part of Olivares AI Engineer. Ask an administrator.',
+    )
+    expect(screen.queryByText(/Add a license|olivares\.ai\/pricing/)).toBeNull()
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('an administrator gets both ways on, as links', async () => {
+    engineAnswers(403, {
+      code: 'edition_required',
+      message: 'Knowledge is part of Olivares AI Engineer.',
+      edition: 'engineer',
+      capability: 'knowledge',
+    })
+    renderIntel(<KnowledgePanel />)
+    expect(
+      await screen.findByRole('link', { name: 'Settings > Edition' }),
+    ).toHaveAttribute('href', '/settings?section=edition')
+    expect(
+      screen.getByRole('link', { name: 'olivares.ai/pricing' }),
+    ).toHaveAttribute('href', 'https://olivares.ai/pricing')
+  })
+
+  it('403 addon_requires_license naming no edition: the engine sentence, never «no access»', async () => {
+    engineAnswers(403, {
+      code: 'addon_requires_license',
+      message: 'The identity add-on is not licensed. Reads keep working.',
+    })
+    renderIntel(<KnowledgePanel />)
+    expect(
+      await screen.findByText(
+        'The identity add-on is not licensed. Reads keep working.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/You do not have access/)).toBeNull()
+    expect(screen.queryByText(/Olivares AI/)).toBeNull()
+    expect(screen.queryByText('Your knowledge bases')).toBeNull()
+    expectNoRawWords()
+  })
+
+  it('a plain 403 stays the no-permission state', async () => {
+    engineAnswers(403, { code: 'forbidden', message: 'forbidden' })
+    renderIntel(<KnowledgePanel />)
+    expect(
+      await screen.findByText('You do not have access to knowledge bases.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Olivares AI/)).toBeNull()
+  })
+
+  it('a 404 module_not_enabled stays the module-off line', async () => {
+    engineAnswers(404, {
+      code: 'module_not_enabled',
+      message: 'The knowledge module is not enabled on this node.',
+      module: 'knowledge',
+    })
+    renderIntel(<KnowledgePanel />)
+    expect(
+      await screen.findByText('Knowledge is not enabled on this installation.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Olivares AI/)).toBeNull()
+  })
+
+  it('a 500 stays the failure, with Retry', async () => {
+    engineAnswers(500, { code: 'internal', message: 'boom' })
+    renderIntel(<KnowledgePanel />)
+    expect(await screen.findByText('Something went wrong')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+    expect(screen.queryByText(/Olivares AI/)).toBeNull()
   })
 })

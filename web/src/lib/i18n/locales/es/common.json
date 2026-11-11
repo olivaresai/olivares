@@ -1,9 +1,22 @@
 {
   "edition": {
     "viewPolicy": "Ver política",
-    "editingRequiresBusiness": "Editar políticas, roles y permisos personalizados requiere Business.",
+    "editingRequiresBusiness": "Editar políticas, roles y permisos personalizados requiere Olivares AI Business.",
     "disablePolicy": "Desactivar política",
-    "disablePolicyDescription": "La política creada deja de aplicarse. Su historial y las demás políticas aplicadas se conservan."
+    "disablePolicyDescription": "La política creada deja de aplicarse. Su historial y las demás políticas aplicadas se conservan.",
+    "note": {
+      "line": "{{capability}} forma parte de {{edition}}. Añade una licencia en <0>Ajustes > Edición</0> o consulta <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "Esto forma parte de {{edition}}. Añade una licencia en <0>Ajustes > Edición</0> o consulta <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} forma parte de {{edition}}. Pregunta a un administrador.",
+      "lineUnnamedAsk": "Esto forma parte de {{edition}}. Pregunta a un administrador.",
+      "readsBelow": "Lo que ya está guardado sigue siendo legible y exportable.",
+      "tag": "Parte de {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skills",
+      "sso": "Inicio de sesión único",
+      "approvalTiers": "Cambiar el nivel de riesgo o el número de aprobaciones de una acción"
+    }
   },
   "errors": {
     "generic": "Algo salió mal"
@@ -113,14 +126,6 @@
     "peopleHint": "Escribe un nombre.",
     "ask": "Preguntar a Olivares…"
   },
-  "hintBar": {
-    "move": "mover",
-    "open": "abrir",
-    "approve": "aprobar",
-    "deny": "denegar",
-    "launcher": "lanzador",
-    "command": "comandos"
-  },
   "permissionWords": {
     "read": "acceso de lectura",
     "write": "acceso de escritura",
@@ -218,6 +223,7 @@
   "notifications": {
     "title": "Actividad reciente",
     "empty": "Sin actividad reciente.",
+    "auditOnly": "La actividad reciente se muestra a quienes pueden leer el registro de auditoría.",
     "viewAll": "Ver todo en el registro de auditoría",
     "events": {
       "auditCheckpoint": "Punto de control de auditoría creado",
@@ -323,7 +329,8 @@
       "launcher": {
         "focus": "Ir al lanzador",
         "start": "Iniciar la sesión",
-        "startBackground": "Iniciarla y quedarte aquí"
+        "startBackground": "Iniciarla y quedarte aquí",
+        "stash": "Apartar el borrador o recuperarlo"
       },
       "surface": {
         "openBeside": "Abrir al lado",
@@ -372,7 +379,9 @@
       },
       "ask": {
         "open": "Preguntar a Olivares"
-      }
+      },
+      "shell.sidebar": "Plegar barra lateral",
+      "shell.panel": "Alternar panel lateral"
     },
     "when": {
       "railFocused": "en el carril de sesiones",

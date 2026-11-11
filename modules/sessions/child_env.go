@@ -63,6 +63,10 @@ const (
 	envWorkRunRef         = envWorkPrefix + "RUN_REF"
 	envCommunicationToken = "OLIVARES_COMMUNICATION_TOKEN"
 	envDisableAutoupdater = "DISABLE_AUTOUPDATER"
+	// envAutoCompactWindow is Claude Code's own variable for the token count a session
+	// compacts at; the profile's auto_compact_window sets it (a CLAUDE_CODE_ name, so a
+	// caller or a gate cannot inject it).
+	envAutoCompactWindow = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
 )
 
 // hookControlEnv names each tool hook's PEP endpoint as its hook command reads it:

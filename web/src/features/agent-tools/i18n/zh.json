@@ -158,7 +158,11 @@
     "default": "默认登录",
     "readFailed": "无法读取配置文件。",
     "truncated": "部分配置文件未显示。",
-    "retry": "重试"
+    "retry": "重试",
+    "turnOff": "关闭 {{name}}",
+    "turnOn": "开启 {{name}}",
+    "switchedOn": "{{name}} 已开启",
+    "switchedOff": "{{name}} 已关闭"
   },
   "tool": {
     "menu": "{{name}} 的选项",
@@ -260,5 +264,30 @@
     "accounts": "账户",
     "allAccounts": "所有账户：详情、标签和绑定",
     "noAccess": "你的角色无法读取此组织的账户和 API 密钥。"
+  },
+  "runtime": {
+    "title": "运行时",
+    "autoCompact": "自动压缩阈值",
+    "autoCompactHint": "在 100,000 到 1,000,000 个 token 后压缩。留空则使用 Claude 的默认值。",
+    "autoCompactPlaceholder": "例如 300000",
+    "autoCompactInvalid": "请输入 100000 到 1000000 之间的整数，或留空。",
+    "saved": "运行时已保存。新会话将使用它。"
+  },
+  "models": {
+    "title": "模型",
+    "note": "只有你能看到此列表。隐藏的模型不会出现在选择器中；工具的默认模型和你手动输入的模型仍可使用。",
+    "filter": "筛选模型",
+    "disableAll": "全部隐藏",
+    "enableAll": "全部显示",
+    "addCustom": "添加自定义模型",
+    "customPlaceholder": "模型 ID，例如 claude-opus-5-5",
+    "customInvalid": "模型 ID 不能含空格，最长 200 个字符。",
+    "add": "添加",
+    "fast": "快速模式",
+    "up": "上移 {{name}}",
+    "down": "下移 {{name}}",
+    "use": "显示 {{name}}",
+    "removeCustom": "移除 {{name}}",
+    "empty": "此工具未报告任何模型。请添加你使用的模型。"
   }
 }

@@ -83,9 +83,9 @@ description: >-
 
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
-| Настроенные ресурсы | `/estate` | Что вы настроили и как части зависят друг от друга, включая рабочие элементы. | `sessions:run:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Настроенные ресурсы | `/estate` | Что вы настроили и как части зависят друг от друга, включая рабочие элементы. | `tenant:admin` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Обнаруженные ресурсы | `/inventory` | Агенты, MCP-серверы и модели, замеченные коннекторами, и когда каждый из них был виден в последний раз. | `inventory:catalog:read` | [reference/modules/i-inventory](/ru/reference/modules/i-inventory/) |
-| Рабочая область | `/workspace` | Агенты, сессии, ресурсы и активность в пределах одной рабочей области | `tenant:read` | [reference/modules/xx-multi-tenancy](/ru/reference/modules/xx-multi-tenancy/) |
+| Рабочая область | `/workspace` | Агенты, сессии, ресурсы и активность в пределах одной рабочей области | `sessions:workspace:read` | [reference/modules/xx-multi-tenancy](/ru/reference/modules/xx-multi-tenancy/) |
 
 ### ИИ
 
@@ -101,7 +101,6 @@ description: >-
 | Профили провайдеров | `/provider-profiles` | Регистрация и администрирование домашних каталогов провайдеров, под которыми запускаются сессии, и чтение их конфигурации по запросу | `sessions:profile:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Провайдеры | `/providers` | Регистрация API-ключей и конечных точек, с которыми запускаются сессии; их проверка, замена и отзыв | `sessions:provider:read` | [how-to/add-a-provider](/ru/how-to/add-a-provider/) |
 | Ограничения частоты | `/rate-limits` | Инвентарь ограничений частоты Anthropic (только чтение) | `models:ratelimits:read` | [reference/modules/x-models](/ru/reference/modules/x-models/) |
-| Охват | `/reach` | Смотрите, до каких адресов может дотянуться каждый инструмент и какие ждут одобрения. | `accessmap:graph:read` | [reference/modules/iii-access-map](/ru/reference/modules/iii-access-map/) |
 | Песочница | `/sandbox` | Изолированное тестирование и воспроизведение агентов | `sandbox:run:read` | [reference/modules/xvii-sandbox](/ru/reference/modules/xvii-sandbox/) |
 | Сессии | `/sessions` | Запускайте сессии и следите за работой каждой, включая те, что находит Olivares | `sessions:live:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Голос | `/voice` | Голосовые сессии и сессии реального времени | `voice:session:read` | [reference/modules/xvi-voice](/ru/reference/modules/xvi-voice/) |
@@ -142,13 +141,12 @@ description: >-
 | Карта доступа | `/access-map` | Что каждый агент читает и записывает (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/ru/reference/modules/iii-access-map/) |
 | Экспорт политик | `/agentcore-export` | Планирование, проверка и применение проекции правил управления этого тенанта на AWS AgentCore в виде политик Cedar; планирование ничего не записывает | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Управляемая политика | `/claude-policy` | Управляемая политика, hooks, MCP, песочница и policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/ru/how-to/connectors/claude-code-hooks-pep/) |
-| Личности и доступ | `/identity` | SSO, SCIM и личности, которые используют ваши агенты | `governance:identity:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
+| Личности и доступ | `/identity` | SSO, SCIM и личности, которые используют ваши агенты | `user:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Прокси инференса | `/inference-proxy` | Шлюзы прокси, правила DLP исходящего трафика и одобрения устройств | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/ru/reference/modules/inferenceproxy/) |
-| Аварийный выключатель | `/killswitch` | Экстренная остановка, восстановление с двойным контролем и локализация guardian | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ru/how-to/cookbook/kill-switch-drill/) |
+| Аварийный выключатель | `/killswitch` | Экстренная остановка, восстановление с двойным контролем и локализация guardian | `governance:killswitch:admin` | [how-to/cookbook/kill-switch-drill](/ru/how-to/cookbook/kill-switch-drill/) |
 | Разрешения | `/permissions` | Идентичности, роли и одобрения | `governance:identity:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Регулярные политики | `/routine-policies` | Минимальная периодичность, ограничения параллелизма, требования одобрения и allowlist cron для процедур Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Безопасность | `/security` | Ограничители, расследования и аномалии | `security:finding:read` | [reference/modules/ix-security](/ru/reference/modules/ix-security/) |
-| Хранилище | `/vault` | Ваши пароли, заметки и коды аутентификатора | `tenant:read` | [reference/console](/ru/reference/console/) |
 
 ### Поставка
 
@@ -163,14 +161,15 @@ description: >-
 | Внедрение | `/adoption` | Продуктивность, принятие результатов и состав моделей | `adoption:metrics:read` | [reference/modules/claudeadoption](/ru/reference/modules/claudeadoption/) |
 | Цепочка поставок | `/attestation` | Аттестация релиза: SLSA, SBOM, VEX и Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/ru/how-to/verify-a-release/) |
 | Реестр аудита | `/audit` | Журнал свидетельств с обнаружением подмены | `audit:read` | [reference/modules/ix-security](/ru/reference/modules/ix-security/) |
-| Панели | `/dashboards` | KPI руководства и отчётность | любой вошедший пользователь | [reference/modules/xxi-executive-dashboards](/ru/reference/modules/xxi-executive-dashboards/) |
+| Панели | `/dashboards` | KPI руководства и отчётность | `tenant:admin` | [reference/modules/xxi-executive-dashboards](/ru/reference/modules/xxi-executive-dashboards/) |
 | Оценки | `/evals` | Качество, оценки и регрессии | `evals:run:read` | [reference/modules/xii-evals](/ru/reference/modules/xii-evals/) |
 | Здоровье и SLA | `/health` | Время работы и SLA агентов и MCP | `health:status:read` | [reference/modules/xxii-health](/ru/reference/modules/xxii-health/) |
 | Наблюдаемость | `/observability` | Здоровье приёма по стандартам и детализация трассировок | `health:status:read` | [reference/modules/observability](/ru/reference/modules/observability/) |
-| Операции | `/operations` | Хост, его диски, активные сессии и их использование за 24 часа, 7 или 30 дней. | `sessions:run:read` | [reference/console](/ru/reference/console/) |
+| Операции | `/operations` | Хост, его диски, активные сессии и их использование за 24 часа, 7 или 30 дней. | `health:status:read` | [reference/console](/ru/reference/console/) |
+| Охват | `/reach` | Смотрите, до каких адресов может дотянуться каждый инструмент и какие ждут одобрения. | `accessmap:graph:read` | [reference/modules/iii-access-map](/ru/reference/modules/iii-access-map/) |
 | Хранение | `/retention` | Срок хранения каждого класса записей, проход, который его применяет, и его запечатанные сертификаты | `compliance:retention:read` | [reference/modules/xiii-compliance](/ru/reference/modules/xiii-compliance/) |
 | Бюджеты | `/stored-budgets` | Потребление относительно каждого сохранённого лимита. Зарезервированная ёмкость засчитывается в лимит. | `finops:budget:read` | [reference/modules/xi-finops](/ru/reference/modules/xi-finops/) |
-| Использование | `/usage` | Официальные 5-часовые и недельные лимиты каждой учётной записи, ближайшая к лимиту первой, и токены и стоимость за сегодня. | `sessions:run:read` | [reference/console](/ru/reference/console/) |
+| Использование | `/usage` | Официальные 5-часовые и недельные лимиты каждой учётной записи, ближайшая к лимиту первой, и токены и стоимость за сегодня. | `sessions:account:read` | [reference/console](/ru/reference/console/) |
 
 ### Система и настройки
 
@@ -183,6 +182,7 @@ description: >-
 | Журналы | `/logs` | Поток журнала движка в реальном времени с фильтрацией по уровню и модулю, поиском и паузой. | `system:admin` | [how-to/troubleshooting](/ru/how-to/troubleshooting/) |
 | Мастер настройки | `/onboarding` | Пошаговая настройка развёртывания | `system:admin` | [start/quickstart](/ru/start/quickstart/) |
 | Обновления | `/updates` | Версия, которую выполняет этот движок, самый новый подписанный релиз его канала и одно действие для установки | `system:admin` | [how-to/upgrade-and-rollback](/ru/how-to/upgrade-and-rollback/) |
+| Хранилище | `/vault` | Ваши пароли, заметки и коды аутентификатора | `tenant:read` | [reference/console](/ru/reference/console/) |
 
 ### Вход, настройка и учётная запись
 

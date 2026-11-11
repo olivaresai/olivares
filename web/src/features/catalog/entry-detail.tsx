@@ -377,6 +377,7 @@ function DetailBody({ entry }: { entry: EntryDTO }) {
           </pre>
         ) : (
           <EmptyState
+            size="panel"
             description={t('detail.specEmptyHint')}
             title={t('detail.specEmpty')}
           />

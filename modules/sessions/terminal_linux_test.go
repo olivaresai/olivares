@@ -221,24 +221,16 @@ func TestTerminalResizeReachesTheShell(t *testing.T) {
 }
 
 func TestTerminalReconnectKeepsTheSameShell(t *testing.T) {
-	old := terminalReconnectWindow
-	terminalReconnectWindow = 5 * time.Second // far wider than the pause below, even on a loaded host
-	t.Cleanup(func() { terminalReconnectWindow = old })
 	m, tenant, _, folder := terminalHarness(t)
 	term := startTestTerminal(t, m, tenant, folder.WorkspaceRef)
-	detach := term.attach()
 	if err := term.send(context.Background(), "echo first-$((6*7))\r"); err != nil {
 		t.Fatal(err)
 	}
 	readUntil(t, term, "first-42")
-	detach()
-	time.Sleep(100 * time.Millisecond) // inside the window
 	again, err := m.terminalOf(tenant, folder.WorkspaceRef, term.id, terminalWho1)
 	if err != nil || again != term {
 		t.Fatalf("reconnect = %v, %v; want the same terminal", again, err)
 	}
-	detach = again.attach()
-	defer detach()
 	// The same shell: its earlier output replays from the start.
 	readUntil(t, again, "first-42")
 	if err := again.send(context.Background(), "echo second-$((6*7))\r"); err != nil {
@@ -247,41 +239,34 @@ func TestTerminalReconnectKeepsTheSameShell(t *testing.T) {
 	readUntil(t, again, "second-42")
 }
 
-func TestTerminalEndsWhenNobodyReconnects(t *testing.T) {
-	old := terminalReconnectWindow
-	terminalReconnectWindow = 150 * time.Millisecond
-	t.Cleanup(func() { terminalReconnectWindow = old })
-	m, tenant, st, folder := terminalHarness(t)
-	term := startTestTerminal(t, m, tenant, folder.WorkspaceRef)
-	term.attach()()
-	select {
-	case <-term.done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("a terminal nobody reconnected to kept running")
+// A terminal is the person's until they close it: leaving it for longer than a reconnect
+// window (the limit was 60 seconds) finds the same shell, its process and its output.
+// Real time on purpose: no limit is named here, so the test holds for any value of one.
+func TestTerminalSurvivesBeingLeft(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits 70 seconds")
 	}
-	if _, err := m.terminalOf(tenant, folder.WorkspaceRef, term.id, terminalWho1); err == nil {
-		t.Fatal("an ended terminal can still be reached")
-	}
-	if len(auditActions(t, st, tenant)["sessions.terminal.close"]) != 1 {
-		t.Fatal("the close is not in the ledger")
-	}
-}
-
-func TestTerminalEndsWhenIdle(t *testing.T) {
-	old := terminalIdleTimeout
-	terminalIdleTimeout = 150 * time.Millisecond
-	t.Cleanup(func() { terminalIdleTimeout = old })
 	m, tenant, _, folder := terminalHarness(t)
 	term := startTestTerminal(t, m, tenant, folder.WorkspaceRef)
-	defer term.attach()() // attached, so only the idle limit can end it
+	if err := term.send(context.Background(), "sleep 300 & echo job-$((6*7))\r"); err != nil {
+		t.Fatal(err)
+	}
+	readUntil(t, term, "job-42")
+	time.Sleep(70 * time.Second) // nobody is reading
 	select {
 	case <-term.done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("an idle terminal kept running")
+		t.Fatalf("the terminal ended while it was left alone (reason %q)", term.closeReason())
+	default:
 	}
-	if got := term.closeReason(); got != "idle" {
-		t.Fatalf("close reason = %q, want idle", got)
+	again, err := m.terminalOf(tenant, folder.WorkspaceRef, term.id, terminalWho1)
+	if err != nil || again != term {
+		t.Fatalf("coming back = %v, %v; want the same terminal", again, err)
 	}
+	readUntil(t, again, "job-42") // its earlier output is still there
+	if err := again.send(context.Background(), "jobs | grep -c sleep\r"); err != nil {
+		t.Fatal(err)
+	}
+	readUntil(t, again, "\r1\r\n") // the process it started is still running: one job named sleep
 }
 
 func TestTerminalBelongsToItsPerson(t *testing.T) {

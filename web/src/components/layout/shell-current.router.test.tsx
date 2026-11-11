@@ -68,7 +68,8 @@ async function currentAt(address: string) {
   await screen.findByRole('navigation', { name: 'Main navigation' })
   const marked = (selector: string) =>
     [...document.querySelectorAll(`${selector} [aria-current="page"]`)].map(
-      (a) => a.getAttribute('data-place') ?? a.getAttribute('href'),
+      (a) =>
+        a.getAttribute('data-place') ?? a.getAttribute('href') ?? a.textContent,
     )
   return {
     places: marked('[data-slot="sidebar"]'),
@@ -100,10 +101,12 @@ describe('the router marks no second current link', () => {
     ['/audit', ['activity'], ['/audit']],
     ['/evals', ['activity'], ['/evals']],
     ['/permissions?tab=approvals', ['rules'], ['/permissions']],
-    ['/sessions?session=s-1', ['sessions'], []],
-    ['/settings', ['settings'], ['/settings']],
-    // Edition is a section of Settings (0.7): Settings is the current place.
-    ['/settings?section=edition', ['settings'], ['/settings']],
+    // Sessions has pages of its own: the top bar's row moves between them as on any place.
+    ['/sessions?session=s-1', ['sessions'], ['/sessions']],
+    // Settings replaces the places with its sections: the open section is the one current
+    // link of the column, and no row is drawn.
+    ['/settings', ['General'], []],
+    ['/settings?section=edition', ['Edition'], []],
   ])('at %s', async (address, places, row) => {
     const current = await currentAt(address)
     expect(current.places).toEqual(places)

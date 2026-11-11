@@ -38,7 +38,10 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  useFailedActionReporter,
+} from '@/lib/hooks/use-privileged-mutation'
 import {
   ListTruncationBadge,
   AsyncSection,
@@ -568,6 +571,7 @@ function EnforcementDialog({
         report(e)
         return
       }
+      if (reportEditionRefusal(e)) return
       if (e instanceof ApiError && e.isForbidden) {
         setDenied(e.message)
         return

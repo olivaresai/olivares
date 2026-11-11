@@ -3,9 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { GitBranch, RefreshCw } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { DisabledReason } from '@/components/ui/disabled-reason'
 import { Input } from '@/components/ui/input'
 import { PathText } from '@/components/ui/path-text'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
@@ -74,6 +75,24 @@ function SessionGitPanel({
         : false,
     retry: false,
   })
+  // A turn that ends may have changed the folder: its Git status, and the uncommitted
+  // changes the Changes view lists, are read at once, not on the next poll. The engine
+  // shows a session that answered its turn as idle.
+  const turnState = useRef(run.state)
+  useEffect(() => {
+    const ended = turnState.current === 'running' && run.state !== 'running'
+    turnState.current = run.state
+    if (!ended) return
+    for (const queryKey of [
+      agentOpsKeys.runGit(activeTenant, boundary.epoch, run.run_ref),
+      agentOpsKeys.runWorktreeDiff(activeTenant, run.run_ref),
+    ])
+      void client.invalidateQueries(
+        { queryKey },
+        // The header and the panel both follow the turn: a read in flight is kept.
+        { cancelRefetch: false },
+      )
+  }, [run.state, run.run_ref, activeTenant, boundary.epoch, client])
   const mutation = useMutation({
     mutationKey: [...key, 'action'],
     mutationFn: async ({
@@ -150,6 +169,22 @@ function SessionGitPanel({
   const data = status.data
   const staged =
     data?.files.some((f) => f.index !== ' ' && f.index !== '?') ?? false
+  // Why Commit cannot run, the first that applies. What the panel already says (the person
+  // may not write, the status failed) describes it where it stands, said once. While a
+  // request runs it says Working… and needs no reason.
+  const saidAbove = !writable
+    ? `${id}-read-only`
+    : status.isError
+      ? `${id}-status`
+      : undefined
+  const commitReason =
+    mutation.isPending || saidAbove
+      ? undefined
+      : !staged
+        ? t('git.nothingStaged')
+        : !message.trim()
+          ? t('git.noMessage')
+          : undefined
   return (
     <section
       className="flex min-w-0 flex-col gap-2 py-2"
@@ -180,13 +215,17 @@ function SessionGitPanel({
       ) : null}
       {noRepository ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-caption text-muted-foreground">
+          <p id={`${id}-status`} className="text-caption text-muted-foreground">
             {t('git.noRepository')}
           </p>
           {initButton}
         </div>
       ) : status.isError ? (
-        <p role="alert" className="text-caption text-destructive">
+        <p
+          id={`${id}-status`}
+          role="alert"
+          className="text-caption text-destructive"
+        >
           {status.error.message}
         </p>
       ) : null}
@@ -275,7 +314,10 @@ function SessionGitPanel({
             </form>
           ) : null}
           {!writable ? (
-            <p className="text-caption text-muted-foreground">
+            <p
+              id={`${id}-read-only`}
+              className="text-caption text-muted-foreground"
+            >
               {t('git.readOnly')}
             </p>
           ) : null}
@@ -353,14 +395,21 @@ function SessionGitPanel({
             <p className="text-caption text-muted-foreground">
               {t('git.commitHint')}
             </p>
-            <Button
-              size="sm"
-              type="submit"
-              className="self-start"
-              disabled={disabled || !staged || !message.trim()}
+            <DisabledReason
+              mode="native"
+              disabled={!!commitReason}
+              reason={commitReason ?? t('git.commit')}
             >
-              {mutation.isPending ? t('git.working') : t('git.commit')}
-            </Button>
+              <Button
+                size="sm"
+                type="submit"
+                className="self-start"
+                disabled={mutation.isPending || !!saidAbove}
+                aria-describedby={saidAbove}
+              >
+                {mutation.isPending ? t('git.working') : t('git.commit')}
+              </Button>
+            </DisabledReason>
           </form>
         </>
       ) : null}

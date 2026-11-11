@@ -1,9 +1,22 @@
 {
   "edition": {
     "viewPolicy": "Voir la politique",
-    "editingRequiresBusiness": "La modification des politiques, rôles et autorisations personnalisés nécessite Business.",
+    "editingRequiresBusiness": "La modification des politiques, rôles et autorisations personnalisés nécessite Olivares AI Business.",
     "disablePolicy": "Désactiver la politique",
-    "disablePolicyDescription": "La politique rédigée cesse de s’appliquer. Son historique et les autres politiques appliquées sont conservés."
+    "disablePolicyDescription": "La politique rédigée cesse de s’appliquer. Son historique et les autres politiques appliquées sont conservés.",
+    "note": {
+      "line": "{{capability}} fait partie de {{edition}}. Ajoutez une licence dans <0>Paramètres > Édition</0> ou consultez <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "Ceci fait partie de {{edition}}. Ajoutez une licence dans <0>Paramètres > Édition</0> ou consultez <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} fait partie de {{edition}}. Demandez à un administrateur.",
+      "lineUnnamedAsk": "Ceci fait partie de {{edition}}. Demandez à un administrateur.",
+      "readsBelow": "Ce qui est déjà enregistré reste lisible et exportable.",
+      "tag": "Fait partie de {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skills",
+      "sso": "Authentification unique",
+      "approvalTiers": "Modifier le niveau de risque ou le nombre d'approbations d'une action"
+    }
   },
   "errors": {
     "generic": "Une erreur s'est produite"
@@ -113,14 +126,6 @@
     "peopleHint": "Saisissez un nom.",
     "ask": "Demander à Olivares…"
   },
-  "hintBar": {
-    "move": "déplacer",
-    "open": "ouvrir",
-    "approve": "approuver",
-    "deny": "refuser",
-    "launcher": "lanceur",
-    "command": "commandes"
-  },
   "permissionWords": {
     "read": "un accès en lecture",
     "write": "un accès en écriture",
@@ -218,6 +223,7 @@
   "notifications": {
     "title": "Activité récente",
     "empty": "Aucune activité récente.",
+    "auditOnly": "L’activité récente est affichée aux personnes autorisées à lire le registre d’audit.",
     "viewAll": "Tout voir dans le registre d’audit",
     "events": {
       "auditCheckpoint": "Point de contrôle d’audit créé",
@@ -323,7 +329,8 @@
       "launcher": {
         "focus": "Aller au lanceur",
         "start": "Démarrer la session",
-        "startBackground": "La démarrer et rester ici"
+        "startBackground": "La démarrer et rester ici",
+        "stash": "Mettre le brouillon de côté ou le rétablir"
       },
       "surface": {
         "openBeside": "Ouvrir à côté",
@@ -372,7 +379,9 @@
       },
       "ask": {
         "open": "Demander à Olivares"
-      }
+      },
+      "shell.sidebar": "Basculer la barre latérale",
+      "shell.panel": "Basculer le panneau latéral"
     },
     "when": {
       "railFocused": "dans le rail des sessions",

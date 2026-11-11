@@ -143,6 +143,10 @@
     "expiredAt": "期限切れ {{time}}",
     "approveOnce": "今回だけ承認",
     "approveForSession": "このセッション中は承認",
+    "allowances": "このセッションの許可",
+    "revokeAllowance": "取り消す",
+    "sessionPolicy": "ポリシーにより毎回のリクエスト確認が必要です。",
+    "allowancesError": "セッションの許可を読み取りまたは更新できませんでした。",
     "approving": "承認中…",
     "deny": "却下",
     "noMatch": "検索に一致するリクエストはありません",
@@ -194,10 +198,11 @@
     "reasonHint": "レビュー担当者向けのコンテキスト（任意）。",
     "requiredApprovals": "必要な承認数",
     "requiredApprovalsHint": "一致する承認ポリシーが適用される場合は無視されます。ポリシーが優先されます。",
-    "expiresInSeconds": "有効期限（秒）",
-    "escalateInSeconds": "エスカレーションまで（秒）",
     "submit": "要求を送信",
-    "created": "承認要求を開きました"
+    "created": "承認要求を開きました",
+    "expiresIn": "有効期限",
+    "escalateIn": "エスカレーションまで",
+    "subjectFold": "対象（任意）"
   },
   "detail": {
     "title": "承認要求",
@@ -274,23 +279,20 @@
     "denyImplicit": "拒否（暗黙）",
     "requiredApprovals": "必要な承認数",
     "requiredApprovalsHint": "0〜64。空欄または 0 はエンジンの既定値を使います。重要なアクションでは既定値が高くなる場合があります。",
-    "expiresInSeconds": "有効期限（秒）",
-    "expiresInSecondsHint": "0〜31536000（0 = 期限なし）。",
-    "escalateInSeconds": "エスカレーションまで（秒）",
-    "escalateInSecondsHint": "0〜31536000（0 = エスカレーションなし）。",
     "countError": "0〜{{max}} の整数を入力してください。",
     "matchAction": "一致するアクション",
     "matchActionHint": "空欄 = 任意のアクションに一致。",
     "matchSubjectKind": "一致するサブジェクトの種類",
     "matchSubjectKindHint": "空欄 = 任意のサブジェクトの種類に一致。",
-    "needsBusiness": "リスクレベルまたは承認数をアクションの既定値から変更するには Business が必要です。このポリシーを無効にすると、保存したまま残せます。",
     "create": "ポリシーを作成",
     "save": "変更を保存",
     "confirmCreateBody": "有効な ABAC ポリシーは直ちにアクセスをさらに制限します。有効な承認ポリシーは、一致するアクションに対して人による承認を要求し始めます。直ちに有効になります。",
     "confirmUpdateBody": "有効な場合、変更は認可パス／承認フローに直ちに反映されます。ポリシーの種類は変更できません。",
     "created": "ポリシーを作成しました",
     "updated": "ポリシーを更新しました",
-    "credentialWarning": "これはクレデンシャルの値のように見えます。ポリシールールが保持するのは参照とセレクターのみであり、シークレットを含めることはできません。"
+    "credentialWarning": "これはクレデンシャルの値のように見えます。ポリシールールが保持するのは参照とセレクターのみであり、シークレットを含めることはできません。",
+    "expiresIn": "有効期限",
+    "escalateIn": "エスカレーションまで"
   },
   "policyRemove": {
     "title": "このポリシーを削除しますか？",
@@ -729,5 +731,15 @@
       "editor": "編集者",
       "owner": "所有者"
     }
+  },
+  "durations": {
+    "none": "無期限",
+    "h1": "1時間",
+    "h4": "4時間",
+    "h8": "8時間",
+    "h24": "24時間",
+    "d7": "7日間",
+    "d30": "30日間",
+    "seconds": "{{value}} 秒"
   }
 }

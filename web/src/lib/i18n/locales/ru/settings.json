@@ -72,7 +72,13 @@
     "editorSsh": "SSH-хост для редактора",
     "editorSshHint": "Как редактор попадает в папки сессий на другой машине: user@host или user@host:port. Пусто: адрес, с которого отдаётся эта консоль; на этом компьютере SSH не нужен.",
     "reduceMotion": "Уменьшить движение",
-    "reduceMotionHint": "Заменяет движение затуханием. Включено, когда это просит система."
+    "reduceMotionHint": "Заменяет движение затуханием. Включено, когда это просит система.",
+    "sendKey": "Клавиша отправки",
+    "sendKeyHint": "Клавиша, которая отправляет сообщение в сессии. При втором варианте Enter переносит строку.",
+    "sendWhileRunning": "Пока инструмент работает",
+    "sendWhileRunningHint": "Что делает клавиша отправки во время хода. Если отправляет Enter, то Ctrl+Enter делает другое.",
+    "sendQueue": "В очередь",
+    "sendSteer": "Направить в ход"
   },
   "sessionNotifications": {
     "title": "Уведомления о сессиях",
@@ -93,14 +99,14 @@
     "scope": "Клавиши, на которые отвечает эта установка. Они одинаковы для всех."
   },
   "edition": {
-    "scope": "Редакция этой сборки, её лицензия и что добавляет Business.",
+    "scope": "Редакция этой сборки, её лицензия и что добавляет Olivares AI Business.",
     "label": "Редакция",
     "unknown": "Этот движок её не сообщает",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business добавляет",
+    "businessAdds": "Olivares AI Business добавляет",
     "summary": {
       "Session cockpit and fleet deployment.": "Панель управления сессиями и развёртывание на парк.",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Совместный доступ к сессиям в реальном времени: именной гостевой доступ с ограниченным сроком и предложения сообщений с одобрением владельца.",
@@ -111,11 +117,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise включает всё, что есть в Business, а также условия, согласованные в договоре, и зависящие от них возможности."
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "Редакция {{edition}}",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "Показывать значок редакции",
       "loadError": "Не удалось загрузить настройку значка.",
       "saveError": "Не удалось сохранить настройку значка. Повторите попытку."
@@ -320,7 +328,7 @@
     "inactive": "Трассировка выключена.",
     "apply": "Применить",
     "saved": "Настройки трассировки сохранены.",
-    "businessRequired": "Отправка в SIEM и внешний экспорт телеметрии требуют Business. Настройки сохраняются; Community не отправляет данные."
+    "businessRequired": "Отправка в SIEM и внешний экспорт телеметрии требуют Olivares AI Business. Настройки сохраняются; Olivares AI Community не отправляет данные."
   },
   "signIn": {
     "methods": "Способы входа",

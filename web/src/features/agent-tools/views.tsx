@@ -7,9 +7,9 @@ import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
 
 // ONE TOOLS PLACE: each tool, who signs in with what, and the accounts and API
-// keys sessions run as. The API key, account, profile and binding pages are doors into
-// this room (their own views.tsx), each under its own read tier, so the room is exported
-// once and every door mounts the same element.
+// keys sessions run as. The account, profile and binding pages are doors into this room
+// and the API key page is its Providers tab (their own views.tsx), each under its own
+// read tier, so the room is exported once and every one of them mounts the same element.
 const ToolsRoom = lazy(() =>
   import('./agent-tools-view').then((m) => ({
     default: m.AgentToolsView,

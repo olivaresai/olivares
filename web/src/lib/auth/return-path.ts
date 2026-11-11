@@ -26,7 +26,8 @@ export function isPlainOriginPath(value: unknown): value is string {
 }
 
 /** Sign-in can return only to a console page on this origin. Authorization
- * remains the destination route's responsibility. Keep its query and fragment. */
+ * remains the destination route's responsibility. Keep its query and fragment.
+ * `/` is a console page too: its route opens the person's start page. */
 export function consoleReturnPath(
   candidate: unknown,
   origin: string,
@@ -36,7 +37,7 @@ export function consoleReturnPath(
     const url = new URL(candidate, origin)
     if (
       url.origin !== origin ||
-      resolveLocation(url.pathname).kind === 'unknown'
+      (url.pathname !== '/' && resolveLocation(url.pathname).kind === 'unknown')
     )
       return null
     return url.pathname + url.search + url.hash

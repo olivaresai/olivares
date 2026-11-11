@@ -29,10 +29,11 @@ import {
   placePages,
   type PageLink,
 } from '@/features/navigation/places'
-import { frameFor } from './page-frames'
 
+// A 32 px pill; the current page is bold as well as filled (the fill is light on purpose),
+// pressing paints the pressed layer, and the focus ring sits inside the pill.
 const MEMBER =
-  'inline-flex h-7 shrink-0 items-center rounded-ctl px-2.5 text-caption font-medium whitespace-nowrap text-text-2 outline-none transition-colors duration-fast hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus aria-[current=page]:bg-active aria-[current=page]:text-text'
+  'inline-flex h-8 shrink-0 items-center rounded-ctl px-2.5 text-[13.5px] font-medium whitespace-nowrap text-text-2 transition-colors duration-fast hover:bg-hover hover:text-text active:bg-[var(--pressed)] focus-visible:-outline-offset-2 aria-[current=page]:bg-active aria-[current=page]:font-bold aria-[current=page]:text-text max-[760px]:min-h-11'
 
 /**
  * Pages of a place behind one native menu button: the row's More, and the Sessions pages on
@@ -96,9 +97,8 @@ export function DestinationSections() {
       el.scrollLeft = Math.max(0, left - 8)
   }, [pathname])
 
-  if (frameFor(pathname) === 'work') return null
   const place = currentPlace(pathname)
-  if (!place) return null
+  if (!place || place === 'settings' || place === 'now') return null
   const members = placePages(place, listed)
   // One permitted member is just the page: no row to move between.
   if (members.length < 2) return null
@@ -118,7 +118,9 @@ export function DestinationSections() {
       ref={row}
       aria-label={t(`places.${place}`)}
       data-slot="destination-sections"
-      className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]"
+      // On a phone the row is the header's second line, full width (concept section 8):
+      // squeezed beside the controls it ran under the search button.
+      className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto px-1 [scrollbar-width:none] max-[760px]:order-last max-[760px]:basis-full max-[760px]:pb-2"
     >
       {members
         .filter((m) => !m.more)
@@ -142,7 +144,7 @@ export function DestinationSections() {
             type="button"
             // The current page is inside: the button wears the current member's look.
             data-current={more.some((m) => m.id === currentId) ? '' : undefined}
-            className={`${MEMBER} gap-1 data-[current]:bg-active data-[current]:text-text data-[state=open]:bg-hover`}
+            className={`${MEMBER} gap-1 data-[current]:bg-active data-[current]:font-bold data-[current]:text-text data-[state=open]:bg-hover`}
           >
             {t('shell.more')}
             <ChevronDown aria-hidden="true" className="size-3.5" />

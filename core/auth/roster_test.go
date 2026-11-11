@@ -11,6 +11,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // TestTenantRosterEnrichesAndIsolates: the members roster returns each tenant
@@ -88,5 +89,79 @@ func TestTenantRosterRejectsSystemAndZero(t *testing.T) {
 	}
 	if r, err := a.TenantRoster(ctx, model.TenantID("")); err != nil || len(r) != 0 {
 		t.Errorf("zero-tenant roster = (%d, %v), want (0, nil)", len(r), err)
+	}
+}
+
+// A suspension exclusion refuses the member's session in the tenant at once and
+// marks the member in the roster, and lifting it restores both: the membership,
+// role and group places never moved.
+func TestSuspensionExclusionRefusesAtOnceAndLiftsCleanly(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	a := auth.NewAuthenticator(st, nil)
+	super := mustSuperadmin(t, ctx, a)
+	acme := provisionTenant(t, st, "acme")
+	const password = "dev-password-1"
+	ed, err := a.CreateUser(ctx, super, auth.NewUser{Email: "ed@acme.com", Password: password, Tenant: acme, Role: auth.RoleEditor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CreateUser(ctx, super, auth.NewUser{Email: "vw@acme.com", Password: password, Tenant: acme, Role: auth.RoleViewer}); err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := a.Login(ctx, "ed@acme.com", password, "10.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	member := func() bool {
+		p, err := a.Authenticate(ctx, token)
+		if err != nil {
+			return false
+		}
+		_, ok := p.RoleIn(acme)
+		return ok
+	}
+	suspended := func() map[string]bool {
+		roster, err := a.TenantRoster(ctx, acme)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]bool{}
+		for _, m := range roster {
+			out[m.User.Email] = m.Suspended
+		}
+		return out
+	}
+	if !member() {
+		t.Fatal("control: ed is not a member before the suspension")
+	}
+
+	var exclusion model.TenantExclusion
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		var err error
+		exclusion, err = as.TenantExclusions().Create(ctx, model.TenantExclusion{
+			UserID: ed.ID, TargetTenantID: acme, Kind: model.ExclusionSuspend, CreatedBy: super.Actor(),
+		})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if member() {
+		t.Error("a suspended member's session still reaches the tenant")
+	}
+	if got := suspended(); !got["ed@acme.com"] || got["vw@acme.com"] {
+		t.Errorf("roster suspended = %v, want only ed", got)
+	}
+
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		return as.TenantExclusions().Delete(ctx, exclusion.ID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !member() {
+		t.Error("lifting the suspension did not restore the session")
+	}
+	if got := suspended(); got["ed@acme.com"] {
+		t.Errorf("roster still marks ed suspended after the lift: %v", got)
 	}
 }

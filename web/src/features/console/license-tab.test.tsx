@@ -1051,7 +1051,9 @@ it('includes the commercial badge in Edition and license', async () => {
   badgeFixture.edition = 'business'
   api.getLicense.mockResolvedValue(validLicense)
   wrap(<LicenseTab />)
-  expect(await screen.findByLabelText('Business edition')).toBeInTheDocument()
+  expect(
+    await screen.findByLabelText('Olivares AI Business'),
+  ).toBeInTheDocument()
 })
 
 afterEach(() => {

@@ -25,7 +25,6 @@ import {
   type ViewGate,
 } from './model'
 import {
-  FIRST_PLACES,
   PLACES,
   buildNavSearchIndex,
   businessRows,
@@ -43,12 +42,12 @@ const everything: ViewGate = () => true
 const t = i18n.getFixedT('en', 'nav')
 
 describe('the sidebar follows the 0.7 map', () => {
-  it('names Sessions, Files and Tools first, then the places under More, one noun each, with Settings at the foot', () => {
+  it('lists the ten places in order, one noun each, in their groups, with Settings at the foot', () => {
     expect(sidebarPlaces(everything).map((p) => t(`places.${p.id}`))).toEqual([
+      'Overview',
       'Sessions',
       'Files',
       'Tools',
-      'Overview',
       'Rules',
       'Usage',
       'Audit',
@@ -56,7 +55,18 @@ describe('the sidebar follows the 0.7 map', () => {
       'Security',
       'Operations',
     ])
-    expect([...FIRST_PLACES]).toEqual(['sessions', 'files', 'tools'])
+    expect(sidebarPlaces(everything).map((p) => p.group)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'control',
+      'control',
+      'control',
+      'admin',
+      'admin',
+      'admin',
+    ])
     expect(t(`places.${settingsPlace().id}`)).toBe('Settings')
     expect(settingsPlace().path).toBe('/settings')
   })
@@ -192,8 +202,8 @@ describe('a place appears only where one of its pages opens', () => {
     const roomClosed = permissionGate((p) => p !== 'sessions:account:read')
     const tools = sidebarPlaces(roomClosed).find((p) => p.id === 'tools')
     expect(tools?.path).toBe('/providers')
-    // With the room open, the door is not listed beside it.
-    expect(placePages('tools', everything).map((p) => p.id)).not.toContain(
+    // API keys retain a distinct Providers tab beside AI tools.
+    expect(placePages('tools', everything).map((p) => p.id)).toContain(
       'providers',
     )
   })
@@ -233,10 +243,10 @@ describe('Admin and Settings hold what IA.md names (0.5 fold)', () => {
     expect(placePages('security', everything).map((p) => p.id)).toEqual(
       registered([
         'security',
+        'killswitch',
         'attestation',
         'compliance',
         'redteam',
-        'killswitch',
       ]),
     )
     expect(placePages('activity', everything).map((p) => p.id)).not.toContain(
@@ -309,18 +319,13 @@ describe('a row shows at most five pages of its place; More holds the rest (DESI
       .map((p) => p.id)
 
   it('names the row and the More of each place', () => {
-    expect(rowOf('sessions')).toEqual([
-      'sessions',
-      'work',
-      'communications',
-      'voice',
-      'sandbox',
-    ])
+    expect(rowOf('sessions')).toEqual(['sessions', 'work', 'communications'])
     expect(moreOf('sessions')).toEqual(
-      registered(['gitPublication', 'sourceDiff', 'recordings']),
+      registered(['gitPublication', 'sandbox', 'voice', 'sourceDiff']),
     )
     expect(rowOf('tools')).toEqual([
       'agent-tools',
+      'providers',
       'models',
       'capabilities',
       'knowledge',
@@ -619,31 +624,50 @@ describe('the palette names the place alone and keeps the former names as search
   })
 })
 
-describe('the closed Business rows', () => {
-  const rowsByView = (rows: (id: string) => readonly string[]) =>
+describe('the closed rows of a higher edition', () => {
+  const rowsByView = (rows: (id: string) => readonly unknown[]) =>
     Object.fromEntries(
       FEATURE_VIEWS.flatMap((v) =>
         rows(v.id).length ? [[v.id, rows(v.id)]] : [],
       ),
     )
+  const businessRow = (id: string) => ({ id, minEdition: 'business' })
+  const ROWS = {
+    work: [businessRow('sessions')],
+    identity: [businessRow('people')],
+    permissions: [businessRow('rules')],
+    usage: [businessRow('usage')],
+    security: [
+      businessRow('securityCompliance'),
+      businessRow('securityRedTeam'),
+    ],
+    operations: [
+      businessRow('operationsDeploy'),
+      businessRow('operationsResidency'),
+    ],
+    retention: [businessRow('retentionSchedules')],
+  }
 
-  it('Community shows them on the page of their capability, and nowhere else', () => {
-    expect(rowsByView(businessRows)).toEqual(
-      BUSINESS_BUILD
-        ? {}
-        : {
-            work: ['sessions'],
-            identity: ['people'],
-            permissions: ['rules'],
-            usage: ['usage'],
-            security: ['securityCompliance', 'securityRedTeam'],
-            operations: ['operationsDeploy', 'operationsResidency'],
-            retention: ['retentionSchedules'],
-          },
-    )
+  // A registered view placed above Community brings its own row, at its address (`path`):
+  // the enterprise overlay's views do, so the table below is the pages' own rows.
+  const own = (rows: typeof businessRows) => (id: string) =>
+    rows(id).filter((row) => row.path === undefined)
+
+  it('sit on the page of their capability, each with its minimum edition, and nowhere else', () => {
+    expect(rowsByView(own(businessRows))).toEqual(ROWS)
   })
 
-  it('a Business build draws none', async () => {
+  // Nothing places the cockpit above Community yet: its row would be false.
+  it('no closed row names the session cockpit', () => {
+    const ids = FEATURE_VIEWS.flatMap((v) =>
+      own(businessRows)(v.id).map((r) => r.id),
+    )
+    expect(ids.filter((id) => /cockpit/i.test(id))).toEqual([])
+  })
+
+  // Which of them shows is the licensed edition's question (editionCovers, in the shell),
+  // never the build's: a Business build lists the same rows.
+  it('a Business build lists the same rows', async () => {
     vi.resetModules()
     vi.doMock('@/features/business-build', async (original) => ({
       ...(await original<typeof import('@/features/business-build')>()),
@@ -651,7 +675,7 @@ describe('the closed Business rows', () => {
     }))
     try {
       const business = await import('./places')
-      expect(rowsByView(business.businessRows)).toEqual({})
+      expect(rowsByView(own(business.businessRows))).toEqual(ROWS)
     } finally {
       vi.doUnmock('@/features/business-build')
       vi.resetModules()

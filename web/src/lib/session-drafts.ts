@@ -4,6 +4,10 @@
 import type { Whoami } from '@/lib/api/types'
 
 const PREFIX = 'olivares.draft.v1.'
+/** The prompts sent to a session, for ArrowUp: another prefix, so no draft count sees them. */
+const HISTORY_PREFIX = 'olivares.history.v1.'
+/** How many prompts a session remembers. */
+const HISTORY_MAX = 20
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
 const changes = new EventTarget()
 /** Drafts this tab could not persist, newest per address, for this tab's own lifetime. */
@@ -110,12 +114,81 @@ export function writeSessionDraft(key: string | null, text: string): boolean {
   }
 }
 
+const historyKey = (draftKey: string) =>
+  HISTORY_PREFIX + draftKey.slice(PREFIX.length)
+
+/** The prompts sent to this session, newest first; kept in this tab's storage under the
+ * draft's address and cleared with the drafts at sign-out. Recalling is a convenience:
+ * storage that is unavailable or unreadable is no history. */
+export function readPromptHistory(draftKey: string | null): string[] {
+  if (!draftKey) return []
+  try {
+    const raw = sessionStorage.getItem(historyKey(draftKey))
+    const list: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(list)
+      ? list.filter((p): p is string => typeof p === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+/** Remembers a prompt that reached the session; the same words again move to the front. */
+export function rememberPrompt(draftKey: string | null, text: string): void {
+  const prompt = text.trim()
+  if (!draftKey || !prompt) return
+  const list = [
+    prompt,
+    ...readPromptHistory(draftKey).filter((p) => p !== prompt),
+  ].slice(0, HISTORY_MAX)
+  try {
+    sessionStorage.setItem(historyKey(draftKey), JSON.stringify(list))
+  } catch {
+    // The tab cannot keep it; the prompt was sent all the same.
+  }
+}
+
+/** A draft set aside with Ctrl+S: its words and whatever was attached to it. */
+export interface StashedDraft<Attachment = unknown> {
+  text: string
+  attachments: Attachment[]
+}
+/** Drafts set aside, newest last, by draft address. Kept in this tab's memory only, so a
+ * reload or a sign-out leaves none (the attachments they name belong to a session). */
+const stashes = new Map<string, StashedDraft[]>()
+
+export function stashedDrafts(key: string | null): number {
+  return key ? (stashes.get(key)?.length ?? 0) : 0
+}
+
+/** Sets a draft aside. Without a scoped address there is nowhere to keep it: false. */
+export function stashDraft(key: string | null, draft: StashedDraft): boolean {
+  if (!key) return false
+  stashes.set(key, [...(stashes.get(key) ?? []), draft])
+  changes.dispatchEvent(new Event('change'))
+  return true
+}
+
+/** Takes back the newest draft set aside. */
+export function unstashDraft<Attachment>(
+  key: string | null,
+): StashedDraft<Attachment> | undefined {
+  const list = key ? stashes.get(key) : undefined
+  if (!key || !list?.length) return undefined
+  stashes.set(key, list.slice(0, -1))
+  changes.dispatchEvent(new Event('change'))
+  return list[list.length - 1] as StashedDraft<Attachment>
+}
+
 export function clearSessionDrafts(): void {
   refused.clear()
+  stashes.clear()
   let keys: string[] = []
   try {
     // A snapshot first: removing an item shifts the remaining storage keys.
-    keys = Object.keys(sessionStorage).filter((key) => key.startsWith(PREFIX))
+    keys = Object.keys(sessionStorage).filter(
+      (key) => key.startsWith(PREFIX) || key.startsWith(HISTORY_PREFIX),
+    )
   } catch {
     // Storage access must not prevent revoking the signed-in session.
   }

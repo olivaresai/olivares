@@ -1,9 +1,22 @@
 {
   "edition": {
     "viewPolicy": "查看策略",
-    "editingRequiresBusiness": "编辑自定义策略、角色和授权需要 Business。",
+    "editingRequiresBusiness": "编辑自定义策略、角色和授权需要 Olivares AI Business。",
     "disablePolicy": "禁用策略",
-    "disablePolicyDescription": "编写的策略将停止生效。其历史记录和其他正在执行的策略将保留。"
+    "disablePolicyDescription": "编写的策略将停止生效。其历史记录和其他正在执行的策略将保留。",
+    "note": {
+      "line": "{{capability}} 属于 {{edition}}。请在<0>设置 > 版本</0>中添加许可证，或访问 <1>olivares.ai/pricing</1>。",
+      "lineUnnamed": "此功能属于 {{edition}}。请在<0>设置 > 版本</0>中添加许可证，或访问 <1>olivares.ai/pricing</1>。",
+      "lineAsk": "{{capability}} 属于 {{edition}}。请联系管理员。",
+      "lineUnnamedAsk": "此功能属于 {{edition}}。请联系管理员。",
+      "readsBelow": "已保存的数据仍可读取和导出。",
+      "tag": "属于 {{edition}}"
+    },
+    "capabilities": {
+      "skills": "技能",
+      "sso": "单点登录",
+      "approvalTiers": "更改操作的风险等级或审批数量"
+    }
   },
   "errors": {
     "generic": "出现错误"
@@ -113,14 +126,6 @@
     "peopleHint": "请输入姓名。",
     "ask": "询问 Olivares…"
   },
-  "hintBar": {
-    "move": "移动",
-    "open": "打开",
-    "approve": "批准",
-    "deny": "拒绝",
-    "launcher": "启动栏",
-    "command": "命令"
-  },
   "permissionWords": {
     "read": "读取权限",
     "write": "写入权限",
@@ -218,6 +223,7 @@
   "notifications": {
     "title": "最近活动",
     "empty": "没有最近的活动。",
+    "auditOnly": "最近活动仅向可以读取审计账本的人显示。",
     "viewAll": "在审计账本中查看全部",
     "events": {
       "auditCheckpoint": "已创建审计检查点",
@@ -323,7 +329,8 @@
       "launcher": {
         "focus": "跳到启动栏",
         "start": "启动会话",
-        "startBackground": "启动并留在此处"
+        "startBackground": "启动并留在此处",
+        "stash": "暂存草稿，或恢复暂存的草稿"
       },
       "surface": {
         "openBeside": "在旁边打开",
@@ -372,7 +379,9 @@
       },
       "ask": {
         "open": "询问 Olivares"
-      }
+      },
+      "shell.sidebar": "切换侧边栏",
+      "shell.panel": "切换侧面板"
     },
     "when": {
       "railFocused": "在会话栏中",

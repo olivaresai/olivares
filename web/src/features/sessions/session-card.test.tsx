@@ -2,14 +2,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
+import { ADMIN_READS } from '@/features/navigation/admin-reads.fixture'
 import type { LiveDTO } from './types'
 
-const featureViews = vi.hoisted(() => [{ id: 'accessMap', hideInNav: true }])
+const featureViews = vi.hoisted(() => [
+  {
+    id: 'accessMap',
+    path: '/access-map',
+    permission: 'accessmap:graph:read',
+    hideInNav: true,
+  },
+])
 vi.mock('@/features/registry', () => ({ FEATURE_VIEWS: featureViews }))
 
 const perms = new Set<string>()
@@ -27,12 +35,25 @@ vi.mock('@tanstack/react-router', () => ({
   useRouter: () => undefined,
 }))
 
+// Every subscription the card asks for, so a test can read its filter and send a frame.
+interface StreamAsk {
+  enabled?: boolean
+  query?: Record<string, string>
+  onSnapshot: (snap: LiveDTO) => void
+}
+const streams = vi.hoisted(() => [] as StreamAsk[])
 vi.mock('@/features/shared', async () => {
   const actual =
     await vi.importActual<typeof import('@/features/shared')>(
       '@/features/shared',
     )
-  return { ...actual, useLiveStream: () => ({ status: 'open' }) }
+  return {
+    ...actual,
+    useLiveStream: (ask: StreamAsk) => {
+      streams.push(ask)
+      return { status: 'open' }
+    },
+  }
 })
 
 vi.mock('@/features/agentops/live-console', () => ({
@@ -200,12 +221,26 @@ describe('SessionCard — offered routes', () => {
     ).toHaveAttribute('href', '/inventory')
   })
 
-  it('offers the access map when the edition view is available', async () => {
+  it('offers the access map to an administrator when the edition view is available', async () => {
     featureViews[0]!.hideInNav = false
+    for (const p of ADMIN_READS) perms.add(p)
     renderCard({ sessionRef: 'sess-ours' })
     expect(
       await screen.findByRole('link', { name: 'Access map' }),
     ).toHaveAttribute('href', '/access-map')
+  })
+
+  it("offers an editor no access map: its read is the administrator's", async () => {
+    // The card's own reads and none of the administrator's: an editor, for this door.
+    featureViews[0]!.hideInNav = false
+    renderCard({ sessionRef: 'sess-ours' })
+    expect(await screen.findByText('Launched')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Access map' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Discovered resources' }),
+    ).toHaveAttribute('href', '/inventory')
   })
 })
 
@@ -811,6 +846,29 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
     expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalledWith({
       claude_session_id: 'sess-dup',
     })
+  })
+
+  it('opened from a profiled run whose row is not proven yet, listens by run_ref and reads the run on its frame', async () => {
+    // A fresh session: the run is open before the tool has said its id, so it has no
+    // live_ref. The approval frame must reach the page now, not after the next poll.
+    vi.mocked(agentOpsApi.getRun).mockResolvedValue({
+      ...profiledRun,
+      live_ref: undefined,
+    })
+    renderCard({ runRef: 'run-a' })
+    await waitFor(() =>
+      expect(streams.at(-1)).toMatchObject({
+        enabled: true,
+        query: { run_ref: 'run-a' },
+      }),
+    )
+    const reads = vi.mocked(agentOpsApi.getRun).mock.calls.length
+    act(() => streams.at(-1)!.onSnapshot(managedLive))
+    await waitFor(() =>
+      expect(vi.mocked(agentOpsApi.getRun).mock.calls.length).toBeGreaterThan(
+        reads,
+      ),
+    )
   })
 
   it('says DISCOVERED for an observed row that copies a run id: no process is proven for it', async () => {

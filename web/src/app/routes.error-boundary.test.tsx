@@ -195,15 +195,18 @@ it('keeps the shell when a feature view throws during render', async () => {
   }
 })
 
-it.each(['/no-such-page', '/automations'])(
+it.each([
+  ['/no-such-page', 'Go to Overview'],
+  ['/automations', 'Go to the start page'],
+])(
   'keeps the shell and a way back for %s, an address this console does not serve',
-  async (path) => {
+  async (path, backLink) => {
     await visit(path)
 
     expect(screen.getByText('Top bar')).toBeInTheDocument()
     expect(screen.getByText('Navigation')).toBeInTheDocument()
     expect(screen.getByRole('main')).toContainElement(
-      screen.getByRole('link', { name: 'Go to Overview' }),
+      screen.getByRole('link', { name: backLink }),
     )
   },
 )

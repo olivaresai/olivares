@@ -91,7 +91,11 @@ que le ledger oublie silencieusement.
 
 ## Notes
 
-Pour les demandes Codex prises en charge, **Approuver pour cette session** accorde la permission examinée pour la session en cours. **Approuver une fois** conserve son comportement à usage unique. Le même choix est disponible dans la conversation et dans la file d'approbation. Les clients API peuvent envoyer `{"decision":"approve","scope":"session"}` lorsque la demande indique `session_scope_allowed: true`. Les autres demandes rejettent cette portée avec HTTP 400 et n'enregistrent aucune décision. La piste de décision et l'événement d'audit conservent la portée ; lorsque plusieurs personnes doivent approuver, une décision à usage unique garde l'accord à usage unique.
+**Approuver pour cette session** autorise la même commande, ou le même outil et chemin, pendant cette session. Une autre action ou une nouvelle session demande une nouvelle approbation. **Approuver une fois** reste à usage unique. Les autorisations figurent dans le panneau Contexte de la session, où un administrateur peut les révoquer. Une politique d’approbation applicable exige un examen à chaque demande et masque cette option.
+
+Pour Edit et Write, toute l’entrée effective de l’outil doit aussi correspondre, y compris le contenu. Ces autorisations n’ont pas de limite de temps distincte : elles prennent fin à la révocation, à l’arrêt de la session ou au changement de son processus. MultiEdit ne propose pas d’autorisation de session.
+
+L’API accepte `{"decision":"approve","scope":"session"}` uniquement si la demande indique `session_scope_allowed: true`. Chaque décision, réutilisation et révocation est auditée. Le fournisseur reçoit des réponses à usage unique pour conserver les contrôles de politique et la révocation.
 
 - `escalate_in_seconds` notifie l'équipe SoD si une demande reste indécise —
   utilisez-le pour les actions critiques en production.

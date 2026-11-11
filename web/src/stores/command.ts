@@ -33,11 +33,16 @@ export interface PendingCommand {
  * whether or not that feature was already on screen. */
 interface CommandState {
   open: boolean
+  /** The keyboard help: `?`, and the account menu. */
+  helpOpen: boolean
+  /** Opening it remembers the `opener` to hand focus back to: the one given (the account
+   *  button, whose menu item is gone by the time the help closes), else what has focus. */
+  setHelpOpen: (open: boolean, opener?: HTMLElement | null) => void
   pendingAction: PendingCommand | null
   /**
-   * The control that had focus when the palette opened (the topbar search button, a
-   * sidebar link, whatever the operator was on when pressing ⌘K), so closing the palette
-   * can hand focus BACK to it. Measured on the built console (console-navigation-n1,
+   * The control that had focus when the palette or the keyboard help opened (the topbar
+   * search button, a sidebar link, whatever the operator was on when pressing ⌘K), so
+   * closing it can hand focus BACK to it. Measured on the built console (console-navigation-n1,
    * 2026-09-06, Chromium 147): after Escape the dialog primitive left focus on <body> on
    * both the keyboard and the pointer path, so the palette restores it itself. Not
    * persisted; a DOM node lives only as long as this page.
@@ -88,6 +93,12 @@ function currentOpener(): HTMLElement | null {
 
 export const useCommandStore = create<CommandState>((set, get) => ({
   open: false,
+  helpOpen: false,
+  setHelpOpen: (helpOpen, opener) =>
+    set((s) => ({
+      helpOpen,
+      opener: helpOpen && !s.helpOpen ? (opener ?? currentOpener()) : s.opener,
+    })),
   pendingAction: null,
   opener: null,
   setOpen: (open) =>

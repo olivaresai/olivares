@@ -1,31 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { cn } from '@/lib/utils'
 import { ThemeToggle } from './theme-toggle'
 import { Wordmark } from './brand'
 
 /** Shell for the unauthenticated surfaces (login, first-boot setup, invitations):
- * a two-column page — what this deployment IS on the left, the one focused card on
- * the right — with a corner theme toggle.
+ * the product's lockup, then the page's one small sheet (`AuthSheet`), centred
+ * in one column on the frame ground, with a corner theme toggle.
  *
- * ⛔ WHY IT IS TWO COLUMNS NOW, and it is a measured defect, not taste.
- *    Captured at 1600 px on 2026-09-17: the login screen was a 360 px card centred in a
- *    1600 px viewport, and the LONGEST element on the page was an amber panel explaining
- *    that passkeys do not work on an IP address. The first thing a new operator read was
- *    a limitation. A review recorded the same thing about the screen behind it —
- *    "three panes, all filled" against "a card grid over an empty lower half".
+ * ONE COLUMN. The page is the form: the lockup names the product, the sheet
+ * does the one job, and nothing stands beside it (the slogan column that used
+ * to sit on the left is gone). The lockup is the product's own mark and traced
+ * name, set larger than in the sidebar; it holds no control, so the tab order
+ * stays skip link, theme toggle, then the form.
  *
- *    The left column is NOT decoration and it is NOT a marketing claim: it says what
- *    the product is and what it guarantees, in three sentences that the engine can be
- *    held to (self-hosted, hash-chained audit, one plane for providers and agents).
- *
- * ⛔ AND IT IS NOT A LANDMARK. `<aside>` would add a `complementary` landmark to the
- *    ONE screen a screen-reader user wants to leave immediately, and the at:gate
- *    landmark inventory would change on every unauthenticated route at once. The
- *    statement is rendered as text with display type, not as a heading, so `<h1>` on
- *    these screens stays exactly one — the card's — and the heading order is unmoved.
+ * On a phone the column keeps the page's 16 px gutter, so the sheet runs edge
+ * to edge inside it; the column grows with its content and the page scrolls,
+ * so a long step (the second-factor enrolment) never slides under the lockup.
  *
  * ⛔ POR QUÉ EL CONTENIDO VA EN `<main>` Y NO EN UN `<div>` — medido el 2026-08-18 al capturar estas
  *    pantallas para la documentación pública: `/login` y `/accept-invite` renderizaban **sin ninguna
@@ -42,14 +36,9 @@ import { Wordmark } from './brand'
  *   que el ancla se llame igual en las dos mitades del producto es lo que permite que el enlace de
  *   salto —hoy sólo en el layout autenticado— valga aquí el día que se añada, sin un segundo nombre. */
 export function AuthShell({ children }: { children: ReactNode }) {
-  const { t } = useTranslation(['common', 'auth'])
-  const promises = [
-    t('auth:shell.selfHosted'),
-    t('auth:shell.audited'),
-    t('auth:shell.onePlane'),
-  ]
+  const { t } = useTranslation('common')
   return (
-    <div className="relative flex min-h-svh flex-col bg-background">
+    <div className="relative flex min-h-svh flex-col bg-frame">
       <a
         href="#main-content"
         onClick={() => {
@@ -67,35 +56,27 @@ export function AuthShell({ children }: { children: ReactNode }) {
         tabIndex={-1}
         className="flex flex-1 flex-col outline-none"
       >
-        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-10 px-6 py-14 lg:grid lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-center lg:gap-16">
-          {/* The statement column. Hidden below lg, where the card IS the page and a
-            scrolling preamble above a password box helps nobody. */}
-          <div className="hidden flex-col gap-6 lg:flex">
-            <Wordmark />
-            <p className="max-w-lg font-display text-display-lg text-foreground">
-              {t('auth:shell.headline')}
-            </p>
-            <ul className="flex max-w-lg flex-col gap-3">
-              {promises.map((line) => (
-                <li
-                  key={line}
-                  className="flex items-start gap-3 text-body text-muted-foreground"
-                >
-                  <span
-                    aria-hidden
-                    className="mt-[0.45rem] size-1.5 shrink-0 rounded-full bg-accent"
-                  />
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="flex w-full flex-col items-center gap-6 lg:items-stretch">
-            <Wordmark className="lg:hidden" />
-            <div className="w-full max-w-md">{children}</div>
-          </div>
+        <div className="mx-auto flex w-full max-w-[27.5rem] flex-1 flex-col justify-center gap-7 px-4 py-14">
+          <Wordmark className="gap-3 self-center [&>svg:first-child]:size-[2.125rem] [&>svg:last-child]:h-[1.1875rem]" />
+          {children}
         </div>
       </main>
     </div>
+  )
+}
+
+/** The one sheet of a public page: 408 px of the canvas surface, raised from
+ * the frame by its shadow and drawn with no outline, holding the page's h1, its
+ * sentence and its form at an even 18 px rhythm. */
+export function AuthSheet({ className, ...props }: ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="auth-sheet"
+      className={cn(
+        'flex w-full flex-col gap-4.5 rounded-panel bg-canvas p-6 shadow-[var(--shadow-raised)] sm:p-8',
+        className,
+      )}
+      {...props}
+    />
   )
 }

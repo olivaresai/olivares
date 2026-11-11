@@ -26,7 +26,7 @@ export function hasChangeAPI(target: PublicationTarget): boolean {
 }
 
 /** The closed refusal vocabulary the module answers with (errors.go, targets.go,
- * publish.go, reconcile.go, routes.go `decode`). Each code has copy under `refusals.<code>`. */
+ * publish.go, changes.go, reconcile.go, routes.go `decode`). Each code has copy under `refusals.<code>`. */
 export const REFUSAL_CODES = [
   'approval_denied',
   'approval_unavailable',
@@ -43,6 +43,7 @@ export const REFUSAL_CODES = [
   'head_mismatch',
   'host_credential_refused',
   'host_unavailable',
+  'identity_mismatch',
   'intent_settled',
   'invalid_request',
   'link_not_allowed',
@@ -60,6 +61,7 @@ export const REFUSAL_CODES = [
   'repository_outside_binding',
   'runtime_credential_refused',
   'scoped_grant_required',
+  'secret_scan_unavailable',
   'separation_of_duty',
   'session_source_refused',
   'session_source_unavailable',
@@ -69,6 +71,7 @@ export const REFUSAL_CODES = [
   'target_changed',
   'target_in_use',
   'unresolved_intent',
+  'unknown_effect',
   'unsupported_requirement',
   'version_conflict',
   'workflow_change_refused',

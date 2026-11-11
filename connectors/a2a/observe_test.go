@@ -94,7 +94,7 @@ func TestDelegationFindingObjectiveScrubbed(t *testing.T) {
 func TestCapabilityFindingExtensionURIScrubbed(t *testing.T) {
 	at := time.Unix(1700000000, 0).UTC()
 	card := AgentCard{
-		Skills: []agentSkill{{ID: "s1", Name: "summarize"}},
+		Skills: []AgentSkill{{ID: "s1", Name: "summarize"}},
 		Capabilities: &AgentCapabilities{
 			Extensions: []agentExtension{{URI: "Bearer sk-live-0123456789abcdefghij"}},
 		},
@@ -112,7 +112,7 @@ func TestCapabilityFindingUnit(t *testing.T) {
 	at := time.Unix(1700000000, 0).UTC()
 	card := AgentCard{
 		ProtocolVersion: "1.0",
-		Skills:          []agentSkill{{ID: "s1", Name: "summarize"}, {ID: "s2", Name: "translate"}},
+		Skills:          []AgentSkill{{ID: "s1", Name: "summarize"}, {ID: "s2", Name: "translate"}},
 		Capabilities:    &AgentCapabilities{Streaming: true, PushNotifications: true},
 	}
 	// Verified card → "verified" trust note.

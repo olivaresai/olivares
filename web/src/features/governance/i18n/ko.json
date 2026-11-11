@@ -143,6 +143,10 @@
     "expiredAt": "{{time}}에 만료됨",
     "approveOnce": "이번만 승인",
     "approveForSession": "이 세션 동안 승인",
+    "allowances": "이 세션의 권한",
+    "revokeAllowance": "취소",
+    "sessionPolicy": "정책에 따라 모든 요청을 검토해야 합니다.",
+    "allowancesError": "세션 권한을 읽거나 업데이트하지 못했습니다.",
     "approving": "승인 중…",
     "deny": "거부",
     "noMatch": "검색과 일치하는 요청이 없습니다",
@@ -194,10 +198,11 @@
     "reasonHint": "검토자를 위한 컨텍스트(선택 사항).",
     "requiredApprovals": "필요한 승인 수",
     "requiredApprovalsHint": "일치하는 승인 정책이 적용되면 무시됩니다 — 정책이 우선입니다.",
-    "expiresInSeconds": "만료까지(초)",
-    "escalateInSeconds": "에스컬레이션까지(초)",
     "submit": "요청 제출",
-    "created": "승인 요청이 열렸습니다"
+    "created": "승인 요청이 열렸습니다",
+    "expiresIn": "만료까지",
+    "escalateIn": "에스컬레이션까지",
+    "subjectFold": "적용 대상(선택)"
   },
   "detail": {
     "title": "승인 요청",
@@ -274,23 +279,20 @@
     "denyImplicit": "거부(암시적)",
     "requiredApprovals": "필요한 승인 수",
     "requiredApprovalsHint": "0에서 64까지입니다. 비어 있거나 0이면 엔진 기본값을 사용하며 심각한 작업에서는 더 높을 수 있습니다.",
-    "expiresInSeconds": "만료까지(초)",
-    "expiresInSecondsHint": "0–31536000(0 = 무기한).",
-    "escalateInSeconds": "에스컬레이션까지(초)",
-    "escalateInSecondsHint": "0–31536000(0 = 무기한).",
     "countError": "0에서 {{max}} 사이의 정수를 입력하십시오.",
     "matchAction": "작업 일치",
     "matchActionHint": "비어 있으면 모든 작업과 일치합니다.",
     "matchSubjectKind": "주체 종류 일치",
     "matchSubjectKindHint": "비어 있으면 모든 주체 종류와 일치합니다.",
-    "needsBusiness": "위험 등급 또는 작업 기본값이 아닌 승인 수는 Business가 필요합니다. 정책을 저장하려면 끄십시오.",
     "create": "정책 만들기",
     "save": "변경 사항 저장",
     "confirmCreateBody": "활성화된 ABAC 정책은 접근을 즉시 추가 제한하며 활성화된 승인 정책은 일치하는 작업에 인간 승인을 요구하기 시작합니다. 즉시 적용됩니다.",
     "confirmUpdateBody": "활성화된 경우 변경이 권한 경로 / 승인 흐름에 즉시 적용됩니다. 정책 종류는 변경할 수 없습니다.",
     "created": "정책이 생성되었습니다",
     "updated": "정책이 업데이트되었습니다",
-    "credentialWarning": "자격 증명 값처럼 보입니다. 정책 규칙은 참조와 선택자만 담으며 비밀은 절대 담지 않습니다."
+    "credentialWarning": "자격 증명 값처럼 보입니다. 정책 규칙은 참조와 선택자만 담으며 비밀은 절대 담지 않습니다.",
+    "expiresIn": "만료까지",
+    "escalateIn": "에스컬레이션까지"
   },
   "policyRemove": {
     "title": "이 정책을 삭제하시겠습니까?",
@@ -729,5 +731,15 @@
       "editor": "편집자",
       "owner": "소유자"
     }
+  },
+  "durations": {
+    "none": "제한 없음",
+    "h1": "1시간",
+    "h4": "4시간",
+    "h8": "8시간",
+    "h24": "24시간",
+    "d7": "7일",
+    "d30": "30일",
+    "seconds": "{{value}}초"
   }
 }

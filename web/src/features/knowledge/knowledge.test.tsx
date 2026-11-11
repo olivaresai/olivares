@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ApiError } from '@/lib/api/errors'
 import type {
   ContextPolicyDTO,
   KbDTO,
@@ -21,6 +22,7 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  info: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
@@ -696,5 +698,56 @@ describe('Context policies tab', () => {
       await screen.findByText(/not authorized|forbidden/i),
     ).toBeInTheDocument()
     expect(api.listContextPolicies).not.toHaveBeenCalled()
+  })
+})
+
+// A RETRIEVAL REFUSED BY EDITION IS NOT A GOVERNANCE DENIAL. The dialog said «Retrieval denied
+// by governance» and the engine's sentence beside the edition toast: the edition answered,
+// not the knowledge base's policy. A governance 403 keeps its own words.
+describe('QueryDialog — a retrieval refused by edition', () => {
+  async function retrieve() {
+    const user = userEvent.setup()
+    wrap(<QueryDialog kb={kbFixture} open onOpenChange={() => {}} />)
+    await user.type(screen.getByRole('textbox', { name: /query/i }), 'runbook')
+    await user.click(screen.getByRole('button', { name: /^run retrieval$/i }))
+  }
+
+  it('says the edition line, never a governance denial', async () => {
+    api.query.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'Knowledge is part of it.', 'r', {
+        edition: 'engineer',
+        capability: 'knowledge',
+      }),
+    )
+    await retrieve()
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    // The dialog's own refusal is drawn when the request settles: Run is enabled again.
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^run retrieval$/i }),
+      ).toBeEnabled(),
+    )
+    expect(
+      screen.queryByText(/retrieval denied by governance/i),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Knowledge is part of it.'),
+    ).not.toBeInTheDocument()
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Engineer.')
+  })
+
+  it('a governance 403 still says retrieval was denied, and why', async () => {
+    api.query.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'the ACL does not name this agent'),
+    )
+    await retrieve()
+    expect(
+      await screen.findByText(/retrieval denied by governance/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('the ACL does not name this agent'),
+    ).toBeInTheDocument()
+    expect(toast.info).not.toHaveBeenCalled()
   })
 })

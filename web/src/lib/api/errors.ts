@@ -3,12 +3,27 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ApiErrorCode, ErrorEnvelope } from './types'
 
+const PAID_EDITIONS = ['engineer', 'business', 'enterprise'] as const
+export type PaidEdition = (typeof PAID_EDITIONS)[number]
+
+export function isPaidEdition(value: unknown): value is PaidEdition {
+  return (PAID_EDITIONS as readonly unknown[]).includes(value)
+}
+
+/** The codes that send a person to an edition, from an engine that names none yet. */
+const EDITION_REFUSALS = [
+  'edition_required',
+  'business_required',
+  'addon_requires_license',
+]
+
 /**
  * ApiError is a typed failure from the engine's REST API. It carries the HTTP
  * status, the stable non-leaking error code (core/api/errors.go), the human
  * message and the X-Request-ID (for support/correlation). The UI maps these to
  * consistent UX: 401 → re-login, 403 → a clear "not authorized" state (never a
- * generic red toast), 409 setup_required → the setup flow, etc.
+ * generic red toast), an edition refusal → the edition line, 409 setup_required
+ * → the setup flow, etc.
  */
 export class ApiError extends Error {
   readonly status: number
@@ -60,7 +75,25 @@ export class ApiError extends Error {
   get isUnauthenticated(): boolean {
     return this.status === 401
   }
+  /** The product's edition answers, not the person's role: any answer that names a
+   * paid edition, and the refusal codes of an engine that names none yet (403
+   * edition_required or addon_requires_license, 501 business_required). Its words are
+   * the edition line, never a permission. */
+  get isEditionRefusal(): boolean {
+    return (
+      isPaidEdition(this.detailString('edition')) ||
+      EDITION_REFUSALS.includes(this.code)
+    )
+  }
+  /** A refusal by ROLE: a 403 that is not an edition refusal. Step-up and tenant
+   * admission are 403 too; they keep their own branches, read first. */
   get isForbidden(): boolean {
+    return this.status === 403 && !this.isEditionRefusal
+  }
+  /** Every 403, role or edition alike: what `isForbidden` answered before an edition
+   * refusal had its own words. For logic that treats both the same (stop a retry,
+   * close a dialog, leave a read to the reporter), never to choose words. */
+  get isForbiddenOrEdition(): boolean {
     return this.status === 403
   }
   get isNotFound(): boolean {
@@ -75,9 +108,9 @@ export class ApiError extends Error {
   /** The action was refused for ASSURANCE, not for role: the operator may do
    * this, but the session must be elevated by a phishing-resistant ceremony
    * first (403 step_up_required — core/api/errors.go:224). Branch on THIS before
-   * `isForbidden`, which is only a status: both are 403, and reporting a step-up
-   * as "not authorized" tells the operator to go ask for a role they already
-   * hold. The remedy is the step-up ceremony, never a generic toast. */
+   * `isForbidden`, which a step-up satisfies too (a 403 that is no edition refusal):
+   * reporting a step-up as "not authorized" tells the operator to go ask for a role
+   * they already hold. The remedy is the step-up ceremony, never a generic toast. */
   get isStepUpRequired(): boolean {
     return this.code === 'step_up_required'
   }

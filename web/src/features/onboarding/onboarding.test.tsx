@@ -456,16 +456,24 @@ describe('the setup wizard', () => {
   })
 
   it('starts a session once a tool is signed in', async () => {
+    const user = userEvent.setup()
     status.codex = { driver: 'codex', installed: true, signed_in: true }
     wrap(<OnboardingView />)
     expect(
       await screen.findByRole('button', { name: 'Start' }),
     ).toBeInTheDocument()
-    // The folder is filled in, not typed (a fresh install: a new folder of its own).
-    expect(
-      await screen.findByRole('combobox', { name: 'Folder' }),
-    ).toHaveTextContent('A new folder for this session')
+    // The folder is chosen, not typed or defaulted: Start waits for the choice.
+    const folder = await screen.findByRole('combobox', { name: 'Folder' })
+    expect(folder).toHaveTextContent('Choose a folder')
     expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await user.click(folder)
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
     expect(
       screen.getByLabelText('First message (optional)'),
     ).toBeInTheDocument()
@@ -590,6 +598,12 @@ describe('the New session dialog: tool and preset', () => {
       screen.getByRole('combobox', { name: 'What the agent may do' }),
     )
     await user.click(await screen.findByRole('option', { name: 'Read only' }))
+    await user.click(screen.getByRole('combobox', { name: 'Folder' }))
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
     await user.click(screen.getByRole('button', { name: 'Start' }))
     expect(launch.launchSession).toHaveBeenCalledWith(
       expect.objectContaining({

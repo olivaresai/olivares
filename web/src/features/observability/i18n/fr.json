@@ -31,7 +31,7 @@
       "available": "Disponible",
       "opt_in_off": "Activation désactivée",
       "blocked": "Bloqué",
-      "unavailable": "Nécessite Business"
+      "unavailable": "Nécessite Olivares AI Business"
     },
     "optInOff": "Convention en développement — désactivée par défaut ; activez-la via le garde-fou du connecteur.",
     "gate": "Garde-fou",

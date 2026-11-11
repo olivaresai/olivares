@@ -11,11 +11,18 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const link = vi.hoisted(() => ({ search: '', navigate: vi.fn() }))
-const auth = vi.hoisted(() => ({ canReadFolders: true }))
+const auth = vi.hoisted(() => ({
+  canReadFolders: true,
+  // Registering a folder (a new typed path) and opening the AI tools place.
+  canRegisterFolders: true,
+  canOpenTools: true,
+}))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     can: (permission: string) =>
-      permission !== 'sessions:workspace:read' || auth.canReadFolders,
+      (permission !== 'sessions:workspace:read' || auth.canReadFolders) &&
+      (permission !== 'sessions:workspace:admin' || auth.canRegisterFolders) &&
+      (permission !== 'sessions:account:read' || auth.canOpenTools),
     isSuperadmin: true,
     activeTenant: 'tnt-a',
   }),
@@ -89,6 +96,8 @@ beforeEach(() => {
   useClientSettings.getState().restore()
   vi.restoreAllMocks()
   auth.canReadFolders = true
+  auth.canRegisterFolders = true
+  auth.canOpenTools = true
   workspaces([])
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_new' })
@@ -100,6 +109,10 @@ beforeEach(() => {
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
     readinessOf({ claude: 'own_login' }),
   )
+  vi.spyOn(agentOpsApi, 'listFolderCandidates').mockResolvedValue({
+    tools: [],
+    folders: [],
+  })
 })
 
 it.each([false, true])(
@@ -141,11 +154,13 @@ it('the work surface keeps the composer while no tool can start, and Enter does 
   })
   expect(await screen.findByRole('button', { name: 'Start' })).toBeDisabled()
   // The way to get a tool ready sits on the same screen: one card, for the tool the
-  // composer would start, and it follows the tool the person picks.
+  // composer would start, and it follows the tool the person picks. The card is the one
+  // instruction: the composer does not say «Install … first» a second time.
   expect(
-    await screen.findByRole('heading', { name: 'Sign it in' }),
+    await screen.findByRole('heading', { name: 'Start a session' }),
   ).toBeVisible()
   expect(await screen.findByTestId('tool-claude')).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Open AI tools' })).toBeNull()
   expect(screen.queryByTestId('tool-codex')).toBeNull()
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: /^Tool and account: / }))
@@ -154,6 +169,40 @@ it('the work surface keeps the composer while no tool can start, and Enter does 
   expect(screen.queryByTestId('tool-claude')).toBeNull()
   await user.type(composer, 'look at the repo{Enter}')
   expect(launch.launchSession).not.toHaveBeenCalled()
+})
+
+it('the work surface offers the folders the tools already worked in once a tool is ready, and registers none until confirmed', async () => {
+  runs([])
+  vi.spyOn(agentOpsApi, 'listFolderCandidates').mockResolvedValue({
+    tools: [{ tool: 'claude', name: 'Claude Code', readable: true }],
+    folders: [
+      {
+        path: '/srv/work/api',
+        tool: 'claude',
+        last_used: new Date().toISOString(),
+        conversations: 4,
+        preselected: true,
+      },
+    ],
+  })
+  const create = vi.spyOn(agentOpsApi, 'createWorkspace')
+  wrap(<WorkStart />)
+  expect(
+    await screen.findByRole('group', { name: 'Bring your folders' }),
+  ).toBeVisible()
+  expect(
+    await screen.findByRole('checkbox', {
+      name: 'Register /srv/work/api (Claude Code)',
+    }),
+  ).toBeChecked()
+  expect(
+    screen.getByRole('button', { name: 'Register selected (1)' }),
+  ).toBeEnabled()
+  // The composer is still the screen's way to start; nothing was registered by looking.
+  expect(
+    screen.getByRole('textbox', { name: 'First message (optional)' }),
+  ).toBeVisible()
+  expect(create).not.toHaveBeenCalled()
 })
 
 it('the composer is on screen before the engine says which tools can start, and keeps what is typed', async () => {
@@ -169,7 +218,7 @@ it('the composer is on screen before the engine says which tools can start, and 
     name: 'First message (optional)',
   })
   // Unknown is not "no": no tool is called not ready, and Enter has nothing to send yet.
-  expect(screen.queryByRole('heading', { name: 'Sign it in' })).toBeNull()
+  expect(screen.queryByTestId('tool-claude')).toBeNull()
   expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
   const user = userEvent.setup()
   await user.type(composer, 'typed early{Enter}')
@@ -190,7 +239,7 @@ it('the composer comes first and Enter starts the session', async () => {
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
   )
-  expect(screen.queryByRole('heading', { name: 'Sign it in' })).toBeNull()
+  expect(screen.queryByTestId('tool-claude')).toBeNull()
   expect(
     composer.compareDocumentPosition(
       screen.getByRole('button', { name: /^Tool and account: / }),
@@ -1134,4 +1183,47 @@ it('uses registered folder names in the picker and thread header without storage
   )
   expect(document.body.textContent).not.toContain('tenant-example')
   expect(document.body.textContent).not.toContain('person-example')
+})
+
+describe('a person who is given folders and tools', () => {
+  beforeEach(() => {
+    auth.canRegisterFolders = false
+    auth.canOpenTools = false
+  })
+
+  it('a typed path says it must be a folder already registered, which an administrator adds', async () => {
+    const user = userEvent.setup()
+    runs([])
+    workspaces([REPO])
+    wrap(<StartSessionForm />)
+    await chooseTypedFolder(user)
+    expect(screen.getByRole('textbox', { name: 'Folder' })).toHaveFocus()
+    expect(
+      screen.getByText(
+        'The path of a folder already registered on this server. An administrator registers new ones.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('A folder on this server.')).toBeNull()
+  })
+
+  it('a person who registers folders keeps the hint that any folder on this server will do', async () => {
+    auth.canRegisterFolders = true
+    const user = userEvent.setup()
+    runs([])
+    workspaces([REPO])
+    wrap(<StartSessionForm />)
+    await chooseTypedFolder(user)
+    expect(screen.getByText('A folder on this server.')).toBeInTheDocument()
+  })
+
+  it('a tool that cannot start says who readies it, with no door to a place the person cannot open', async () => {
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
+    runs([])
+    workspaces([REPO])
+    wrap(<StartSessionForm />)
+    expect(
+      await screen.findByText(/Ask an administrator to get it ready\./),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open AI tools' })).toBeNull()
+  })
 })

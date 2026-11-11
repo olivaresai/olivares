@@ -75,25 +75,21 @@ describe('the frames themselves', () => {
     expect(inner.className).toContain('max-w-page')
   })
 
-  it('home keeps the document scroller and drops the top padding', () => {
-    // 16 px of py-4 above the title made the first work row 16 px later than the
-    // budget (header 48 + title 24 + composer 64 = 136) before anything else sat
-    // on the page. Other document routes keep the padded frame.
-    const home = render(<RouteFrame pathname="/now">home</RouteFrame>)
-    const homeBody = home.container.querySelector(
-      '[data-slot="console-page-body"]',
-    ) as HTMLElement
-    expect(homeBody.className).toMatch(/\bpt-0\b/)
-    expect(homeBody.className).not.toMatch(/\bpy-4\b/)
-    home.unmount()
-
-    const settings = render(
-      <RouteFrame pathname="/settings">settings</RouteFrame>,
-    )
-    const settingsBody = settings.container.querySelector(
-      '[data-slot="console-page-body"]',
-    ) as HTMLElement
-    expect(settingsBody.className).toMatch(/\bpy-4\b/)
+  it('home pads its top like every document page, so nothing sits under the header bar', () => {
+    // Home dropped the 16 px top padding while it painted a title and a composer above
+    // its first row. It paints neither now (the header bar names the place), so the
+    // first line of Overview sat flat against the bar, read as scrolled under it.
+    for (const pathname of ['/now', '/settings']) {
+      const { container, unmount } = render(
+        <RouteFrame pathname={pathname}>page</RouteFrame>,
+      )
+      const body = container.querySelector(
+        '[data-slot="console-page-body"]',
+      ) as HTMLElement
+      expect(body.className).toMatch(/\bpy-4\b/)
+      expect(body.className).not.toMatch(/\bpt-0\b/)
+      unmount()
+    }
   })
 
   it('the document frame does not stretch its content', () => {

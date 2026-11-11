@@ -452,14 +452,15 @@ test.describe('folder-first launch', () => {
     await expect(
       page.getByText('folder-first.txt', { exact: true }).first(),
     ).toBeVisible()
-    await page.getByRole('radio', { name: 'Terminal', exact: true }).click()
     const terminalOpened = page.waitForResponse(
       (r) =>
         /\/terminals$/.test(new URL(r.url()).pathname) &&
         r.request().method() === 'POST',
     )
+    // Opening the drawer starts a shell.
     await page
-      .getByRole('button', { name: 'Open terminal', exact: true })
+      .getByTestId('terminal-drawer')
+      .getByRole('button', { name: 'Terminal', exact: true })
       .click()
     expect((await terminalOpened).status()).toBe(201)
     await expect(page.getByTestId('terminal-screen')).toBeVisible()
@@ -470,6 +471,10 @@ test.describe('folder-first launch', () => {
       process.env.E2E_SESSION_FOLDER!,
     )
     await page
+      .getByRole('button', { name: 'Close Terminal 1', exact: true })
+      .click()
+    await page
+      .getByRole('dialog', { name: 'Close Terminal 1?', exact: true })
       .getByRole('button', { name: 'Close terminal', exact: true })
       .click()
     await page

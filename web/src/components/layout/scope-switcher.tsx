@@ -25,25 +25,15 @@ import {
 } from './tenant-switcher'
 import { useWorkspaceChoices, WorkspaceMenuItems } from './workspace-switcher'
 
-/**
- * The face of the control: an initial, then the name. The initial is drawn, not text,
- * so the text on the control is its name (WCAG 2.5.3).
- */
+/** The face of the control: the scope's name in bold; orange stays for what needs a person. */
 function ScopeFace({ name }: { name: string }) {
   return (
-    <>
-      <span
-        aria-hidden
-        data-initial={name.trim().charAt(0).toUpperCase() || '·'}
-        className="grid size-5 shrink-0 place-items-center rounded-md bg-accent-soft text-[11px] leading-none font-bold text-accent-text before:content-[attr(data-initial)]"
-      />
-      <span className="min-w-0 flex-1 truncate text-left">{name}</span>
-    </>
+    <span className="min-w-0 flex-1 truncate text-left font-bold">{name}</span>
   )
 }
 
 const FACE_CLASS =
-  'inline-flex h-9 min-w-0 max-w-[14rem] shrink items-center gap-2 rounded-full px-2.5 text-body font-medium text-text'
+  'inline-flex h-[34px] w-full min-w-0 shrink items-center gap-2 rounded-ctl px-2 text-caption text-text'
 
 export function ScopeSwitcher() {
   const tenant = useTenantChoices()
@@ -84,7 +74,7 @@ export function ScopeSwitcher() {
             }
             className={cn(
               FACE_CLASS,
-              'outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
+              'hover:bg-hover active:bg-[var(--pressed)]',
             )}
           >
             <ScopeFace name={name} />

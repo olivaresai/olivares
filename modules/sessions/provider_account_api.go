@@ -88,6 +88,9 @@ type providerAccountDTO struct {
 	// SessionEgressHosts are the hosts an administrator declared this account's
 	// confined sessions may reach beside their provider.
 	SessionEgressHosts []string `json:"session_egress_hosts,omitempty"`
+	// AutoCompactWindow is the Claude Code auto-compact window declared on the account's
+	// profile, in tokens; absent when none is declared.
+	AutoCompactWindow int `json:"auto_compact_window,omitempty"`
 	// Identity is who the vendor says is signed in, and IdentitySource says where
 	// that came from. Nothing asks the vendor yet, so the source is "none" and the
 	// identity is empty rather than guessed.
@@ -96,6 +99,9 @@ type providerAccountDTO struct {
 	LastLoginAt    string `json:"last_login_at,omitempty"`
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
+	// Plan is the plan the account's tool reported, raw ("max", "promax"). It is absent when
+	// the tool named none.
+	Plan string `json:"plan,omitempty"`
 	// Usage is the latest utilization and credits the account's tool reported
 	// (provider_account_usage.go). It is absent when the tool reported none.
 	Usage []accountUsageDTO `json:"usage,omitempty"`
@@ -136,7 +142,7 @@ func toProviderAccountDTO(a ProviderAccount) providerAccountDTO {
 		HomeRelative:   accountHomeRelative(a),
 		IsolationLevel: a.IsolationLevel, OSUser: a.OSUser,
 		ReleaseRef: a.ReleaseRef, PendingRelease: a.PendingRelease,
-		AuthSource: a.AuthSource, ProviderRecordRef: a.ProviderRecordRef, SessionEgressHosts: a.SessionEgressHosts,
+		AuthSource: a.AuthSource, ProviderRecordRef: a.ProviderRecordRef, SessionEgressHosts: a.SessionEgressHosts, AutoCompactWindow: a.AutoCompactWindow,
 		IdentitySource: accountIdentityNone, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 	}
 }

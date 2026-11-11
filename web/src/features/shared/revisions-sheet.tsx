@@ -223,6 +223,7 @@ export function RevisionsSheet<TSnapshot, TEntity>({
             />
           ) : revisions.length === 0 ? (
             <EmptyState
+              size="panel"
               description={labels.emptyHint}
               icon={<History />}
               title={labels.empty}

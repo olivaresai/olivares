@@ -84,6 +84,7 @@
     "notReady": "{{tool}}은(는) 아직 시작할 수 없습니다.",
     "folder": "폴더",
     "folderHint": "이 서버의 폴더입니다.",
+    "folderHintGiven": "이 서버에 이미 등록된 폴더의 경로입니다. 새 폴더는 관리자가 등록합니다.",
     "folderChoose": "폴더 선택",
     "folderNew": "이 세션을 위한 새 폴더",
     "folderTyped": "다른 폴더…",
@@ -111,6 +112,7 @@
     "credentialsManage": "관리형 자격 증명 관리",
     "listUnavailable": "엔진이 비밀 목록에 응답하지 않았습니다. 지금은 아무것도 선택할 수 없습니다.",
     "openTools": "AI 도구 열기",
+    "askAdmin": "관리자에게 준비를 요청하십시오.",
     "model": "모델",
     "providerDefault": "기본값({{model}})",
     "nativeDefault": "{{tool}} 기본값",
@@ -123,14 +125,21 @@
     "profileNeedsKey": "키 필요",
     "foldersUnreadable": "등록된 폴더를 읽지 못했습니다. 이 서버의 폴더 경로를 입력하십시오.",
     "folderPermission": "{{name}}(으)로 시작합니다. 이 폴더의 기본값입니다.",
-    "autoAsks": "{{tool}}에는 자동 모드가 없어 각 작업 전에 묻습니다."
+    "autoAsks": "{{tool}}에는 자동 모드가 없어 각 작업 전에 묻습니다.",
+    "worktreeCheckout": "현재 체크아웃",
+    "worktreeNew": "새 워크트리",
+    "worktreeFrom": "시작 지점",
+    "worktreeFromHint": "브랜치 또는 커밋(선택)",
+    "worktreeNewHint": "세션은 별도 폴더의 자체 브랜치에서 작업합니다. 현재 체크아웃은 그대로 유지됩니다.",
+    "worktreeLegend": "작업 사본"
   },
   "composer": {
     "toolPill": "도구 및 계정: {{value}}",
     "modelPill": "모델: {{value}}",
     "effortPill": "노력: {{value}}",
     "folderPill": "폴더: {{value}}",
-    "moreOptions": "추가 옵션"
+    "moreOptions": "추가 옵션",
+    "worktreePill": "작업 사본: {{value}}"
   },
   "lists": {
     "foldersTruncated": "등록된 폴더: {{count}}개 로드됨, 더 있음.",

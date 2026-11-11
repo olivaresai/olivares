@@ -103,7 +103,7 @@ Any tree change, including a workflow-only diff, requires new qualification.
 | `olivares.vex.openvex.json`, one per release | `govulncheck -format openvex` + `cosign attest` | **OpenVEX** driven by reachability, attested to the image by digest (SCP-04) |
 | `*.intoto.jsonl` | `slsa-github-generator` (generic + container) | **SLSA Build L3 (SLSA v1.2) provenance** (SCP-01) |
 | container image `docker.io/olivaresai/olivares` (Docker Hub — official; `ghcr.io/olivaresai/olivares` is the fallback, identical content by digest) | goreleaser (builds + signs on ghcr.io) + the `mirror-dockerhub` job (`cosign copy` by digest) | cosign signature (keyless) + SBOM + VEX + SLSA attestations, by digest |
-| Historical Helm chart (OCI) `ghcr.io/olivaresai/charts/olivares` — **not an asset of Olivares <!-- release -->0.9<!-- /release -->**: from 0.1 the chart source and signed packages are supplied through Business, outside the Community channel | helm | cosign over the OCI manifest + (optional) GPG `.prov` (SCP-05) |
+| Historical Helm chart (OCI) `ghcr.io/olivaresai/charts/olivares` — **not an asset of Olivares <!-- release -->0.10<!-- /release -->**: from 0.1 the chart source and signed packages are supplied through Business, outside the Community channel | helm | cosign over the OCI manifest + (optional) GPG `.prov` (SCP-05) |
 | Release notes support-period header | goreleaser | declares the release line support period; see [`CRA-READINESS.md`](CRA-READINESS.md#support-period-declarations) |
 
 All container/image/chart references are pinned **by digest**, never by tag.
@@ -124,7 +124,7 @@ below) with `cosign verify-blob` and `sha256sum` alone.
 <!-- release -->
 ```sh
 /path/to/olivares/scripts/verify-release.sh                    # keyless / Sigstore (default)
-/path/to/olivares/scripts/verify-release.sh --source-tag 0.9   # also pin the SLSA provenance source tag
+/path/to/olivares/scripts/verify-release.sh --source-tag 0.10   # also pin the SLSA provenance source tag
 ```
 <!-- /release -->
 
@@ -238,7 +238,7 @@ cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
 
 olivares release verify-manifest --manifest stable-manifest.json \
-  --checksums checksums.txt --dir . --expect-channel stable --expect-version 0.9
+  --checksums checksums.txt --dir . --expect-channel stable --expect-version 0.10
 
 # --checksums is REQUIRED: the signing step itself re-runs the cross-check.
 olivares release sign-manifest --manifest stable-manifest.json \
@@ -287,8 +287,8 @@ forever and pin installations to a superseded version. The default window is **9
 re-signs before it lapses. If you see the expiry error, you are talking to a
 stale endpoint or an out-of-date bundle — fetch a fresh one.
 
-Version contract with the commerce deployment: the release tag is <!-- release -->`0.9`<!-- /release -->; GoReleaser archive names,
-`manifest.version`, a pinned `ENTERPRISE_VERSION` (the default is `latest`), and channel-object paths use release <!-- release -->`0.9`<!-- /release --> without `v`.
+Version contract with the commerce deployment: the release tag is <!-- release -->`0.10`<!-- /release -->; GoReleaser archive names,
+`manifest.version`, a pinned `ENTERPRISE_VERSION` (the default is `latest`), and channel-object paths use release <!-- release -->`0.10`<!-- /release --> without `v`.
 The commerce deployment mirrors the verified pair and listed archives under
 `https://olivares.ai/updates/stable/{manifest.json,manifest.json.sig,<archive>}`; it never signs.
 
@@ -302,7 +302,7 @@ A from-source rebuild must supply both to match the published `checksums.txt`:
 <!-- release -->
 ```sh
 # Rebuild a release binary from source and compare its SHA-256 to checksums.txt:
-git checkout 0.9
+git checkout 0.10
 OLIVARES_LICENSE_PUBKEY="<published license public key, below>" \
 OLIVARES_OTA_PUBKEY="<published OTA public key, below>" task build:repro
 sha256sum bin/olivares          # compare to checksums.txt

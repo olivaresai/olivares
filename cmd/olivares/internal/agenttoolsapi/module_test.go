@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 	"github.com/olivaresai/olivares/core/api"
@@ -332,19 +331,15 @@ func TestAPIAuthenticationPlanInstallAuditAndReplay(t *testing.T) {
 	if installed.Code != 202 {
 		t.Fatalf("install %d %s", installed.Code, installed.Body.String())
 	}
-	deadline := time.Now().Add(10 * time.Second)
+	// The install job ends when the module's job goroutine does; go test's own
+	// timeout bounds the wait, not a wall-clock budget a loaded runner can pass.
+	m.wg.Wait()
 	var result Job
-	for time.Now().Before(deadline) {
-		w := call("GET", "/v1/m/agenttools/jobs/"+id.String(), token, nil, tenant)
-		if w.Code != 200 {
-			t.Fatalf("job %d %s", w.Code, w.Body.String())
-		}
-		json.Unmarshal(w.Body.Bytes(), &result)
-		if result.State != "running" {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	finished := call("GET", "/v1/m/agenttools/jobs/"+id.String(), token, nil, tenant)
+	if finished.Code != 200 {
+		t.Fatalf("job %d %s", finished.Code, finished.Body.String())
 	}
+	json.Unmarshal(finished.Body.Bytes(), &result)
 	if result.State != "succeeded" || result.Receipt == nil || result.Progress == "" || result.AuditError != "" {
 		t.Fatalf("result %+v", result)
 	}

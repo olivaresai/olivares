@@ -190,7 +190,7 @@ urllib.request.urlopen = urlopen
                     continue
                 self.assertEqual(baseline['tag_name'], expected)
                 base = 'https://github.com/olivaresai/olivares/releases/download/0.1'
-                expected = [f'-fSL --retry 2 --max-time 90 {base}/{asset} -o {root}/{asset}'
+                expected = [f'-fSL --retry 3 --max-time 90 {base}/{asset} -o {root}/{asset}'
                             for asset in ('checksums.txt', 'checksums.txt.sig', 'checksums.txt.pem')]
                 expected.append(f'verify-blob --certificate {root}/checksums.txt.pem '
                                 f'--signature {root}/checksums.txt.sig '

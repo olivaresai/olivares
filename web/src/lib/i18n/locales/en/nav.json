@@ -370,18 +370,26 @@
       "placeholder": "Enter queues a message for after this turn",
       "placeholderSteer": "Enter queues for after this turn, Ctrl+Enter steers it now",
       "discarded": "The session was released with these messages still queued:",
-      "copy": "Copy"
-    }
+      "copy": "Copy",
+      "placeholderQueueKey": "{{key}} queues a message for after this turn",
+      "placeholderSteerKey": "{{key}} steers it into this turn now"
+    },
+    "stash": "Set this draft aside",
+    "stashRestore": "Bring back the draft set aside",
+    "plan": "Plan",
+    "planHint": "Plan first: the tool reads and proposes a plan and changes nothing. Applies from your next message."
   },
   "shell": {
     "more": "More",
     "searchCommands": "Search and commands",
     "search": "Search",
+    "searchGo": "Search or go to…",
     "stopAll": "Stop all",
     "workspaceCount": "Workspaces: {{count}}",
     "rail": {
       "title": "Sessions",
-      "all": "All",
+      "seeAll_one": "See {{count}} session",
+      "seeAll_other": "See all {{count}} sessions",
       "groups": {
         "needsYou": "Needs you",
         "working": "Working",
@@ -431,15 +439,17 @@
     "killswitch": {
       "estateStopped": "ALL AGENTS STOPPED",
       "estateBody": "Agents cannot act until two user accounts approve starting again.",
-      "agentStops": "{{count}} agent stop active",
-      "agentStops_one": "{{count}} agent stop active",
-      "agentStops_other": "{{count}} agent stops active",
+      "agentStops": "{{count}} agents stopped",
+      "agentStops_one": "{{count}} agent stopped",
+      "agentStops_other": "{{count}} agents stopped",
       "none": "Nothing is stopped. Sessions and agents run normally."
     },
     "status": {
       "label": "Status",
       "running_one": "{{count}} session open",
       "running_other": "{{count}} sessions open",
+      "needYou_one": "{{count}} needs you",
+      "needYou_other": "{{count}} need you",
       "usage": "{{tool}} usage",
       "fiveHour": "5h",
       "week": "wk",
@@ -450,7 +460,6 @@
     },
     "collapse": "Collapse navigation",
     "expand": "Expand navigation",
-    "openNavigation": "Open navigation",
     "closeNavigation": "Close navigation"
   },
   "places": {
@@ -476,6 +485,10 @@
     "securityRedTeam": "Red team runs and scoring",
     "operationsDeploy": "Deploy agents to other hosts",
     "operationsResidency": "Data residency and tenants",
-    "retentionSchedules": "Schedules are applied only in Olivares Business: this edition keeps them and purges nothing."
+    "retentionSchedules": "Schedules are applied only in Olivares AI Business: this edition keeps them and purges nothing."
+  },
+  "groups": {
+    "control": "Governance",
+    "admin": "Administration"
   }
 }

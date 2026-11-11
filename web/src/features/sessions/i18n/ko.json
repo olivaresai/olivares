@@ -58,7 +58,9 @@
     "truncated": "파일 또는 브랜치 처음 200개를 표시합니다. 변경을 좁힌 뒤 새로 고침하십시오.",
     "fileStatus": "인덱스: {{index}}; 작업 트리: {{worktree}}",
     "commitHint": "스테이지된 변경만 커밋되며 프로필의 이름과 이메일을 사용합니다.",
-    "working": "작업 중…"
+    "working": "작업 중…",
+    "nothingStaged": "아직 스테이지된 항목이 없습니다. 커밋할 파일을 스테이지하세요.",
+    "noMessage": "커밋 메시지를 입력하세요."
   },
   "title": "세션",
   "refresh": "새로 고침",
@@ -602,10 +604,18 @@
       "todos": "할 일 목록 ({{total}}개 중 {{done}}개 완료)",
       "send": "답변 보내기",
       "answered": "답변을 보냈습니다: {{answer}}",
-      "sendFailed": "답변을 보내지 못했습니다."
-    }
+      "sendFailed": "답변을 보내지 못했습니다.",
+      "implement": "구현",
+      "implementText": "계획을 구현해 주세요."
+    },
+    "cite": "입력창에 인용"
   },
   "changes": {
+    "scope": "변경 범위",
+    "session": "세션 시작 이후",
+    "latest": "최근 턴",
+    "before": "이전",
+    "after": "이후",
     "title": "{{folder}}의 변경",
     "titleNoFolder": "변경",
     "hint": "이 세션이 시작된 이후 에이전트가 폴더에서 변경한 파일입니다.",
@@ -692,6 +702,16 @@
       "empty": "댓글을 작성하십시오.",
       "atBase": "베이스에서",
       "atTip": "브랜치 팁에서"
+    },
+    "folder": {
+      "title": "커밋되지 않은 변경",
+      "since": "<branch />의 마지막 커밋 이후.",
+      "sinceCommit": "마지막 커밋({{base}}) 이후.",
+      "empty": "마지막 커밋 이후 변경이 없습니다.",
+      "noCommit": "이 폴더에는 아직 커밋이 없어 비교할 대상이 없습니다.",
+      "original": "마지막 커밋",
+      "modified": "폴더",
+      "fileTruncated": "양쪽 각각의 앞부분만 표시합니다."
     }
   },
   "peers": {
@@ -877,11 +897,14 @@
     "scriptsFailed": "프로젝트 스크립트를 읽을 수 없습니다.",
     "stopScript": "중지",
     "title": "터미널",
+    "maximize": "터미널 최대화",
+    "restore": "터미널 크기 복원",
     "hint": "이 세션의 폴더 안에서 실행되는 셸입니다. 세션과 같은 제한이 적용되며 내 계정으로 실행됩니다. 입력한 모든 명령줄이 기록됩니다.",
     "open": "터미널 열기",
-    "close": "닫기",
     "copy": "복사",
     "paste": "붙여넣기",
+    "selectAll": "모두 선택",
+    "jumpToLatest": "최신으로 이동",
     "again": "새 터미널 열기",
     "reconnecting": "다시 연결하는 중…",
     "ended": "터미널이 종료되었습니다.",
@@ -894,7 +917,8 @@
       "step_up": "먼저 본인 확인을 한 뒤 터미널을 다시 여세요.",
       "refused": "이 폴더에서 터미널을 열 권한이 없습니다.",
       "busy": "열려 있는 터미널이 너무 많습니다. 먼저 하나를 닫으세요.",
-      "failed": "터미널을 열 수 없었습니다. 잠시 후 다시 시도하세요."
+      "failed": "터미널을 열 수 없었습니다. 잠시 후 다시 시도하세요.",
+      "unsafe": "이 명령은 실행되지 않았습니다. 키 입력처럼 동작할 수 있는 제어 문자 또는 숨은 문자가 들어 있습니다."
     },
     "keys": {
       "esc": "Esc",
@@ -903,7 +927,27 @@
       "up": "위",
       "down": "아래"
     },
-    "closeLabel": "터미널 닫기"
+    "starting": "시작하는 중…",
+    "list": "터미널",
+    "new": "새 터미널",
+    "split": "분할",
+    "unsplit": "분할 닫기",
+    "search": "검색",
+    "actions": "터미널 작업",
+    "searchLabel": "터미널에서 검색",
+    "searchPrevious": "이전 일치 항목",
+    "searchNext": "다음 일치 항목",
+    "rename": "터미널 이름 바꾸기",
+    "renameHint": "두 번 클릭하여 이름 바꾸기",
+    "closeNamed": "{{name}} 닫기",
+    "closeTitle": "{{name}}을(를) 닫을까요?",
+    "closeBody": "셸과 셸이 시작한 모든 것이 종료됩니다.",
+    "closeConfirm": "터미널 닫기",
+    "sendToAgent": "에이전트에 보내기",
+    "sendToAgentHint": "선택한 출력을 메시지에 넣습니다. 보내기 전에 편집할 수 있습니다.",
+    "contextLabel": "{{name}}의 출력:",
+    "drawer": "터미널 서랍",
+    "runInTerminal": "터미널에서 실행"
   },
   "strip": {
     "needYou_other": "확인 필요 {{count}}개",

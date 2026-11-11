@@ -21,6 +21,7 @@ import {
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import { DENSITY_ROW, usePreferencesStore } from '@/stores/preferences'
@@ -128,6 +129,84 @@ describe('DataTable — small (non-virtualized) path is unchanged', () => {
     const headers = screen.getAllByRole('columnheader')
     expect(headers.length).toBe(2)
     expect(headers[0]).toHaveAttribute('aria-sort', 'none')
+  })
+
+  it('draws the A2 table: a raised frame, a tinted 12/700 header, the sorted column in the primary ink', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <DataTable
+        columns={columns}
+        data={make(3)}
+        getRowId={(r) => r.id}
+        empty={BENCH_EMPTY}
+        onRowClick={() => {}}
+      />,
+    )
+    // The frame is a surface with the card shadow and no outline.
+    const frame = container.querySelector('[data-slot="data-table"] > div')!
+    expect(frame).toHaveClass(
+      'rounded-card',
+      'bg-surface',
+      'shadow-[var(--shadow-card)]',
+    )
+    expect(frame).not.toHaveClass('border')
+    // The header is opaque, because it stays put over the rows that scroll under it.
+    const header = screen.getAllByRole('columnheader')[0]!
+    expect(header).toHaveClass(
+      'bg-[color-mix(in_srgb,var(--text)_4%,var(--surface))]',
+      'text-overline',
+      'aria-[sort=ascending]:text-text',
+      'aria-[sort=descending]:text-text',
+    )
+    expect(header).not.toHaveClass('bg-muted', 'font-medium')
+    // Sorting moves the column into the primary ink; the arrow takes it, not the orange.
+    await user.click(within(header).getByRole('button', { name: 'Name' }))
+    expect(header).toHaveAttribute('aria-sort', 'ascending')
+    expect(header.querySelector('svg')).not.toHaveClass('text-accent-text')
+    // A row reacts to the pointer with the hover layer and settles on the pressed one.
+    expect(bodyRows()[0]).toHaveClass(
+      'hover:bg-hover',
+      'active:bg-[var(--pressed)]',
+    )
+    expect(bodyRows()[0]).not.toHaveClass('hover:bg-surface')
+  })
+
+  it('pads its header and cells 16 px at the sides, as the drawing does', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={make(1)}
+        getRowId={(r) => r.id}
+        empty={BENCH_EMPTY}
+      />,
+    )
+    for (const cell of [
+      screen.getAllByRole('columnheader')[0]!,
+      screen.getAllByRole('gridcell')[0]!,
+    ]) {
+      expect(cell).toHaveClass('px-4')
+      expect(cell).not.toHaveClass('px-3')
+    }
+  })
+
+  it('lies flat inside a card: the card lifts, the table under it does not', () => {
+    const { container } = render(
+      <Card>
+        <CardContent>
+          <DataTable
+            columns={columns}
+            data={make(1)}
+            getRowId={(r) => r.id}
+            empty={BENCH_EMPTY}
+          />
+        </CardContent>
+      </Card>,
+    )
+    const frame = container.querySelector('[data-slot="data-table"] > div')!
+    // jsdom matches no ancestor variant, so this pins the relation: the frame drops its
+    // shadow under whatever names itself a card, and the card does.
+    expect(frame).toHaveClass('[[data-slot=card]_&]:shadow-none')
+    expect(frame.closest('[data-slot="card"]')).toBe(container.firstChild)
   })
 })
 
@@ -331,6 +410,9 @@ describe('DataTable — controlled row selection', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Select row 1' }))
     expect(screen.getByTestId('selected-ids')).toHaveTextContent('1')
     expect(bodyRows()[1]).toHaveAttribute('aria-selected', 'true')
+    // Selection is the neutral tone: orange is the primary action, no coloured side border.
+    expect(bodyRows()[1]).toHaveClass('bg-active')
+    expect(bodyRows()[1]).not.toHaveClass('border-l-accent')
     expect(onRowClick).not.toHaveBeenCalled()
 
     const selectAll = screen.getByRole('checkbox', {
@@ -444,6 +526,37 @@ describe('DataTable — zero rows has two causes', () => {
     await waitFor(() => expect(bodyRows().length).toBe(3))
     expect(screen.queryByText(GENERIC)).not.toBeInTheDocument()
     expect(screen.queryByText('No agents enrolled yet')).not.toBeInTheDocument()
+  })
+
+  it('says a filter hid every row without the product’s mark, and Clear filters brings them back', async () => {
+    const onSearchChange = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <DataTable
+        columns={columns}
+        data={make(3)}
+        getRowId={(r) => r.id}
+        empty={CALLER_EMPTY}
+        searchable
+        onSearchChange={onSearchChange}
+      />,
+    )
+    await user.type(search(), 'zzz-matches-nothing')
+    const title = await screen.findByText(GENERIC)
+    const state = title.closest('[data-slot="state-block"]') as HTMLElement
+    expect(state).toHaveAttribute('data-state', 'filtered')
+    // The table's own size: compact, and no mark (nothing about the product is empty).
+    expect(state).toHaveClass('py-8')
+    expect(state.querySelector('[data-slot="state-mark"]')).toBeNull()
+    expect(state).toHaveTextContent('zzz-matches-nothing')
+    expect(state).toHaveTextContent('3 items are hidden by the filters.')
+
+    await user.click(
+      within(state).getByRole('button', { name: 'Clear filters' }),
+    )
+    await waitFor(() => expect(bodyRows().length).toBe(3))
+    expect(search()).toHaveValue('')
+    expect(onSearchChange).toHaveBeenLastCalledWith('')
   })
 })
 

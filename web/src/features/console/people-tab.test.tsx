@@ -14,7 +14,8 @@ import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as consoleLocales from './i18n'
 
-const { api, authState, serverInfo } = vi.hoisted(() => ({
+const { api, authState, serverInfo, edition } = vi.hoisted(() => ({
+  edition: { business: false },
   api: {
     onboard: vi.fn(),
     listInvites: vi.fn(),
@@ -24,6 +25,7 @@ const { api, authState, serverInfo } = vi.hoisted(() => ({
     listSuperadmins: vi.fn(),
     setSuperadminActive: vi.fn(),
     endMemberSessions: vi.fn(),
+    setMemberSuspended: vi.fn(),
   },
   authState: {
     activeTenant: 't1' as string | null,
@@ -35,7 +37,27 @@ const { api, authState, serverInfo } = vi.hoisted(() => ({
   serverInfo: { data: {} as { invite_delivery_unavailable?: boolean } },
 }))
 
+const panels = vi.hoisted(() => ({
+  peopleActions: [] as import('@/features/panels').PanelExtension[],
+}))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: {
+      ...actual.PANEL_EXTENSIONS,
+      get peopleActions() {
+        return panels.peopleActions
+      },
+    },
+  }
+})
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
+vi.mock('@/features/business-build', () => ({
+  get BUSINESS_BUILD() {
+    return edition.business
+  },
+}))
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => serverInfo,
 }))
@@ -83,6 +105,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   authState.can = (_p: string, _opts?: unknown) => true
   serverInfo.data = {}
+  edition.business = false
+  panels.peopleActions = []
   api.listInvites.mockResolvedValue(emptyList)
   api.listMembers.mockResolvedValue(emptyList)
   api.listSuperadmins.mockResolvedValue(emptyList)
@@ -572,5 +596,101 @@ describe('PeopleTab — the TOTP reset names what it shows', () => {
     expect(totpResetLabel.replace('{{email}}', 'ana@example.com')).toContain(
       totpReset,
     )
+  })
+})
+
+describe('PeopleTab — find people and suspend them (A4 rows 4.1, 4.7)', () => {
+  const bob = {
+    ...member,
+    user_id: 'u2',
+    email: 'bob@acme.io',
+    display_name: 'Bob',
+    status: 'suspended',
+    external_id: undefined,
+    sso_only: false,
+    role: 'editor',
+  }
+  const ada = { ...member, external_id: undefined, sso_only: false }
+
+  it('narrows the roster by search and by status', async () => {
+    edition.business = true
+    api.listMembers.mockResolvedValue({ items: [ada, bob], has_more: false })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await screen.findByText(ada.email)
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search people' }),
+      'bob',
+    )
+    expect(screen.queryByText(ada.email)).toBeNull()
+    expect(screen.getByText(bob.email)).toBeTruthy()
+    await user.clear(screen.getByRole('searchbox', { name: 'Search people' }))
+    await user.click(screen.getByRole('combobox', { name: 'Filter by status' }))
+    await user.click(await screen.findByRole('option', { name: 'Suspended' }))
+    expect(screen.queryByText(ada.email)).toBeNull()
+    expect(screen.getByText(bob.email)).toBeTruthy()
+  })
+
+  it('suspends an active person after confirmation and reactivates a suspended one', async () => {
+    edition.business = true
+    api.listMembers.mockResolvedValue({ items: [ada, bob], has_more: false })
+    api.setMemberSuspended.mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await screen.findByText(ada.email)
+    await openRowActions(user, ada.email)
+    await user.click(
+      await screen.findByRole('menuitem', { name: `Suspend ${ada.email}` }),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Suspend' }))
+    await waitFor(() =>
+      expect(api.setMemberSuspended).toHaveBeenCalledWith('u1', true),
+    )
+
+    await openRowActions(user, bob.email)
+    await user.click(
+      await screen.findByRole('menuitem', { name: `Reactivate ${bob.email}` }),
+    )
+    await waitFor(() =>
+      expect(api.setMemberSuspended).toHaveBeenCalledWith('u2', false),
+    )
+  })
+
+  it('offers no suspension in Community', async () => {
+    api.listMembers.mockResolvedValue({ items: [ada], has_more: false })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await screen.findByText(ada.email)
+    await openRowActions(user, ada.email)
+    expect(
+      screen.queryByRole('menuitem', { name: `Suspend ${ada.email}` }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select every person shown' }),
+    ).toBeNull()
+  })
+})
+
+describe('PeopleTab — an edition adds ways to add people (A4 row 4.2)', () => {
+  it('shows an added action beside Onboard user, only with its permission', async () => {
+    panels.peopleActions = [
+      {
+        id: 'import',
+        permission: 'membership:write',
+        Component: () => <button type="button">Import from a file</button>,
+      },
+    ]
+    wrap(<PeopleTab />)
+    expect(
+      await screen.findByRole('button', { name: 'Import from a file' }),
+    ).toBeTruthy()
+
+    cleanup()
+    authState.can = (p: string) => p !== 'membership:write'
+    wrap(<PeopleTab />)
+    await screen.findByText('No active members.')
+    expect(
+      screen.queryByRole('button', { name: 'Import from a file' }),
+    ).toBeNull()
   })
 })

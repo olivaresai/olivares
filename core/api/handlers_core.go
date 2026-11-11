@@ -73,6 +73,12 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc Mod
 	if s.edition != "" {
 		info["edition"] = s.edition
 	}
+	// The edition the live license entitles, beside the build's: a Community build holding an
+	// Engineer or Business license offers the step to the licensed build. Absent for a product
+	// this build does not know.
+	if lic.LicensedEdition != "" {
+		info["licensed_edition"] = lic.LicensedEdition
+	}
 	// The pin of the certificate this engine serves, so the console can print the full
 	// `olivares login --server <address> --pin-sha256 <pin>` line for a self-signed
 	// engine. It is public by nature: every TLS client receives the certificate.
@@ -99,8 +105,9 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc Mod
 	if s.previewsHidden {
 		info["previews_hidden"] = true
 	}
-	// No invitation mailer: invite mode answers 409 invite_delivery_unavailable, so
-	// the console offers the initial password only. Absent when invitations are mailed.
+	// No invitation mailer: invite mode answers 409 invite_delivery_unavailable unless
+	// it asks for delivery "link", so the console shows the link on the screen. Absent
+	// when invitations are mailed.
 	if s.inviteSender == nil {
 		info["invite_delivery_unavailable"] = true
 	}

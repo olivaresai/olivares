@@ -156,7 +156,8 @@
     "statuses": {
       "active": "Actif",
       "inactive": "Inactif",
-      "error": "Erreur"
+      "error": "Erreur",
+      "suspended": "Suspendu"
     },
     "roles": {
       "viewer": "Lecteur",
@@ -172,7 +173,25 @@
     "endSessionsFor": "Terminer les connexions pour {{email}} ?",
     "endSessionsBody": "Toutes les connexions actives de {{email}} cesseront de fonctionner dans cette organisation. Ses connexions à d'autres organisations, les jetons API et le compte ne sont pas modifiés.",
     "sessionsEnded": "L’accès à cette organisation a pris fin",
-    "totpResetDone": "Facteur TOTP réinitialisé."
+    "totpResetDone": "Facteur TOTP réinitialisé.",
+    "search": "Rechercher des personnes",
+    "filterLabel": "Filtrer par statut",
+    "filterAll": "Tous les statuts",
+    "noMatch": "Aucune correspondance",
+    "noMatchHint": "Modifiez la recherche ou le filtre de statut.",
+    "bulkLabel": "Actions pour les personnes sélectionnées",
+    "selected": "Sélectionnées : {{n}}",
+    "selectAll": "Sélectionner toutes les personnes affichées",
+    "selectRow": "Sélectionner {{email}}",
+    "suspend": "Suspendre",
+    "reactivate": "Réactiver",
+    "suspendTitle": "Suspendre l'accès",
+    "suspendBody": "{{email}} ne peut plus se connecter ni utiliser de jetons d'API dans cette organisation, dès maintenant. Son rôle et ses groupes sont conservés et vous pouvez le réactiver à tout moment.",
+    "suspendBodyMany": "{{n}} personnes ne peuvent plus se connecter ni utiliser de jetons d'API dans cette organisation, dès maintenant. Leurs rôles et leurs groupes sont conservés et vous pouvez les réactiver à tout moment.",
+    "suspendFor": "Suspendre {{email}}",
+    "reactivateFor": "Réactiver {{email}}",
+    "suspendedToast": "Suspendues : {{n}}",
+    "reactivatedToast": "Réactivées : {{n}}"
   },
   "superadmins": {
     "title": "Administrateurs de l’installation",
@@ -313,7 +332,7 @@
       "sessions": "Le secret est retiré du coffre. Une session qui le reçoit continue de s’exécuter, mais elle ne pourra pas être reprise, et un modèle de session qui le nomme ne pourra pas se lancer, jusqu’à ce que vous le recréiez."
     },
     "sessionCaption": "Secrets qu’une session peut recevoir en variables d’environnement. Les noms commencent par env/. Une valeur n’est plus jamais affichée.",
-    "credentialCaption": "Identifiants gérés qu'une session peut utiliser via les assistants du moteur (Business). Les noms commencent par credential/. Une valeur n'est jamais affichée à nouveau.",
+    "credentialCaption": "Identifiants gérés qu'une session peut utiliser via les assistants du moteur (Olivares AI Business). Les noms commencent par credential/. Une valeur n'est jamais affichée à nouveau.",
     "colValue": "Valeur",
     "colChanged": "Dernière modification",
     "colReference": "Référence",
@@ -939,7 +958,7 @@
   "activation": {
     "title": "Activation de Business",
     "caption": "Activez les modules inclus dans votre édition. Les contrôles avec une valeur par défaut sûre sont activés ; ceux qui nécessitent un secret ou une revue de politique sont préparés pour que vous les complétiez et les promouviez.",
-    "unavailable": "L'activation est disponible dans l'édition business.",
+    "unavailable": "L'activation est disponible dans Olivares AI Business.",
     "enablePreset": "Activer un preset",
     "addon": "Module",
     "state": "État",

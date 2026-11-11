@@ -10,6 +10,19 @@
     "unavailableDescription": "会话读取没有响应。上方的数字不受影响。",
     "untitled": "未命名会话"
   },
+  "folders": {
+    "title": "您的文件夹",
+    "start": "开始",
+    "startIn": "在 {{folder}} 中开始",
+    "canWork": "可以工作",
+    "readOnly": "只读",
+    "showAll": "显示全部文件夹（{{total}}）",
+    "loading": "正在加载您的文件夹",
+    "emptyTitle": "您还没有文件夹",
+    "emptyDescription": "管理员授予您某个文件夹的访问权限后，它会显示在这里。",
+    "unavailableTitle": "无法加载您的文件夹",
+    "unavailableDescription": "下方的会话不受影响。"
+  },
   "empty": {
     "title": "暂无可显示内容",
     "description": "您的角色未被授予对任何资产域模块的读取权限。请向管理员申请读取授权以查看概览。"

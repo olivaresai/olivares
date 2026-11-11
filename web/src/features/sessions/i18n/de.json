@@ -58,7 +58,9 @@
     "truncated": "Die ersten 200 Dateien oder Branches werden angezeigt. Nach dem Eingrenzen der Änderungen aktualisieren.",
     "fileStatus": "Index: {{index}}; Arbeitsverzeichnis: {{worktree}}",
     "commitHint": "Nur vorgemerkte Änderungen werden mit Name und E-Mail Ihres Profils committet.",
-    "working": "Wird ausgeführt…"
+    "working": "Wird ausgeführt…",
+    "nothingStaged": "Noch ist nichts vorgemerkt. Merken Sie eine Datei vor, um sie zu committen.",
+    "noMessage": "Schreiben Sie eine Commit-Nachricht."
   },
   "title": "Sitzungen",
   "refresh": "Aktualisieren",
@@ -620,10 +622,18 @@
       "todos": "Aufgabenliste ({{done}} von {{total}} erledigt)",
       "send": "Antwort senden",
       "answered": "Antwort gesendet: {{answer}}",
-      "sendFailed": "Die Antwort konnte nicht gesendet werden."
-    }
+      "sendFailed": "Die Antwort konnte nicht gesendet werden.",
+      "implement": "Umsetzen",
+      "implementText": "Setzen Sie den Plan um."
+    },
+    "cite": "Im Eingabefeld zitieren"
   },
   "changes": {
+    "scope": "Änderungsumfang",
+    "session": "Seit Sitzungsbeginn",
+    "latest": "Letzter Schritt",
+    "before": "Vorher",
+    "after": "Nachher",
     "title": "Änderungen in {{folder}}",
     "titleNoFolder": "Änderungen",
     "hint": "Dateien, die der Agent seit Beginn dieser Sitzung in seinem Ordner geändert hat.",
@@ -710,6 +720,16 @@
       "empty": "Schreiben Sie den Kommentar.",
       "atBase": "am Ausgangspunkt",
       "atTip": "an der Branch-Spitze"
+    },
+    "folder": {
+      "title": "Nicht committete Änderungen",
+      "since": "Seit dem letzten Commit auf <branch />.",
+      "sinceCommit": "Seit dem letzten Commit ({{base}}).",
+      "empty": "Keine Änderungen seit dem letzten Commit.",
+      "noCommit": "Dieser Ordner hat noch keinen Commit, daher gibt es nichts zu vergleichen.",
+      "original": "Im letzten Commit",
+      "modified": "Im Ordner",
+      "fileTruncated": "Es wird nur der Anfang jeder Seite angezeigt."
     }
   },
   "peers": {
@@ -899,11 +919,14 @@
     "scriptsFailed": "Projektskripte konnten nicht gelesen werden.",
     "stopScript": "Stoppen",
     "title": "Terminal",
+    "maximize": "Terminal maximieren",
+    "restore": "Terminalgröße wiederherstellen",
     "hint": "Eine Shell im Ordner dieser Sitzung, mit denselben Grenzen wie die Sitzung. Sie läuft unter Ihrer Identität; jede eingegebene Befehlszeile wird aufgezeichnet.",
     "open": "Terminal öffnen",
-    "close": "Schließen",
     "copy": "Kopieren",
     "paste": "Einfügen",
+    "selectAll": "Alles auswählen",
+    "jumpToLatest": "Zum Neuesten springen",
     "again": "Neues Terminal öffnen",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "ended": "Das Terminal wurde beendet.",
@@ -916,7 +939,8 @@
       "step_up": "Bestätigen Sie zuerst Ihre Identität und öffnen Sie das Terminal dann erneut.",
       "refused": "Sie haben kein Recht, in diesem Ordner ein Terminal zu öffnen.",
       "busy": "Sie haben zu viele Terminals geöffnet. Schließen Sie zuerst eines.",
-      "failed": "Das Terminal konnte nicht geöffnet werden. Versuchen Sie es gleich noch einmal."
+      "failed": "Das Terminal konnte nicht geöffnet werden. Versuchen Sie es gleich noch einmal.",
+      "unsafe": "Dieser Befehl wurde nicht ausgeführt: Er enthält Steuer- oder versteckte Zeichen, die wie Tastenanschläge wirken könnten."
     },
     "keys": {
       "esc": "Esc",
@@ -925,7 +949,27 @@
       "up": "Hoch",
       "down": "Runter"
     },
-    "closeLabel": "Terminal schließen"
+    "starting": "Wird gestartet…",
+    "list": "Terminals",
+    "new": "Neues Terminal",
+    "split": "Teilen",
+    "unsplit": "Teilung schließen",
+    "search": "Suchen",
+    "actions": "Terminalaktionen",
+    "searchLabel": "Im Terminal suchen",
+    "searchPrevious": "Vorheriger Treffer",
+    "searchNext": "Nächster Treffer",
+    "rename": "Terminal umbenennen",
+    "renameHint": "Doppelklick zum Umbenennen",
+    "closeNamed": "{{name}} schließen",
+    "closeTitle": "{{name}} schließen?",
+    "closeBody": "Das beendet die Shell und alles, was sie gestartet hat.",
+    "closeConfirm": "Terminal schließen",
+    "sendToAgent": "An den Agenten senden",
+    "sendToAgentHint": "Setzt die markierte Ausgabe in Ihre Nachricht, wo Sie sie vor dem Senden bearbeiten können.",
+    "contextLabel": "Ausgabe von {{name}}:",
+    "drawer": "Terminalleiste",
+    "runInTerminal": "Im Terminal ausführen"
   },
   "strip": {
     "needYou_one": "{{count}} braucht Sie",

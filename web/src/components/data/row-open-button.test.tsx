@@ -22,4 +22,18 @@ describe('RowOpenButton', () => {
     await user.keyboard('{Enter}')
     expect(onOpen).toHaveBeenCalledOnce()
   })
+
+  it('shows its focus as the 2 px outline in the focus color, a solid one', () => {
+    render(<RowOpenButton onOpen={() => {}}>Home A</RowOpenButton>)
+    const button = screen.getByRole('button', { name: 'Home A' })
+    // An outline, so forced-colors mode keeps it; solid, because a bare width
+    // inherits the style `outline-none` sets to none.
+    expect(button).toHaveClass(
+      'focus-visible:outline-2',
+      'focus-visible:outline-solid',
+      'focus-visible:outline-offset-2',
+      'focus-visible:outline-focus',
+    )
+    expect(button.className).not.toMatch(/\bring-/)
+  })
 })

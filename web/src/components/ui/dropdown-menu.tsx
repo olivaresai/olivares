@@ -7,9 +7,10 @@ import type { ComponentProps, HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * DropdownMenu — the contextual action menu over Radix DropdownMenu. Dense
- * (h-8 items, text-body), flat `bg-elevated` panel with a strong hairline and
- * `shadow-md`. Highlighted items wash to `bg-muted`; the `destructive` item variant
+ * DropdownMenu — the contextual action menu over Radix DropdownMenu, as direction A2 draws
+ * a popover menu: the highest surface (`bg-raised`) with the pop shadow and a hairline inside
+ * it, no outline; 34 px items (44 px on a phone) whose quiet icons light under the pointer,
+ * the hover layer and a press layer; headings at 12/700. The `destructive` item variant
  * shifts to danger text + a danger-soft highlight. Radix handles roving focus,
  * typeahead and full keyboard nav — never reimplement those.
  */
@@ -31,8 +32,8 @@ export function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 min-w-44 overflow-hidden bg-elevated border border-border-strong rounded-md shadow-md p-1',
-          'transition-opacity duration-150 ease-out',
+          'z-50 min-w-44 overflow-hidden rounded-card border-0 bg-raised p-1.5 shadow-[var(--shadow-pop),inset_0_0_0_1px_var(--line)]',
+          'transition-opacity duration-[var(--duration-panel)] ease-out',
           'data-[state=open]:opacity-100 data-[state=closed]:opacity-0',
           className,
         )}
@@ -41,6 +42,10 @@ export function DropdownMenuContent({
     </DropdownMenuPrimitive.Portal>
   )
 }
+
+/** Keyboard focus: a 2 px ring in the focus colour, inside the row. */
+const ITEM_FOCUS =
+  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus'
 
 export interface DropdownMenuItemProps extends ComponentProps<
   typeof DropdownMenuPrimitive.Item
@@ -61,14 +66,15 @@ export function DropdownMenuItem({
     <DropdownMenuPrimitive.Item
       data-variant={variant}
       className={cn(
-        'flex h-8 cursor-default select-none items-center gap-2 rounded-sm px-2 text-body outline-none',
-        'transition-colors duration-100 ease-out',
-        'data-[highlighted]:bg-muted',
-        'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-        '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',
+        'flex h-[34px] cursor-default select-none items-center gap-[11px] rounded-sm px-2.5 text-body outline-none max-md:min-h-11',
+        'transition-colors ease-out',
+        'data-[highlighted]:bg-hover data-[highlighted]:active:bg-[var(--pressed)]',
+        ITEM_FOCUS,
+        'data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+        '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-2 data-[highlighted]:[&_svg]:text-text',
         inset && 'pl-8',
         variant === 'destructive' &&
-          'text-danger data-[highlighted]:bg-danger-soft data-[highlighted]:text-danger [&_svg]:text-danger',
+          'text-danger data-[highlighted]:bg-danger-soft data-[highlighted]:text-danger [&_svg]:text-danger data-[highlighted]:[&_svg]:text-danger',
         className,
       )}
       {...props}
@@ -86,10 +92,11 @@ export function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       checked={checked}
       className={cn(
-        'relative flex h-8 cursor-default select-none items-center gap-2 rounded-sm py-0 pl-8 pr-2 text-body outline-none',
-        'transition-colors duration-100 ease-out',
-        'data-[highlighted]:bg-muted',
-        'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex h-[34px] cursor-default select-none items-center gap-[11px] rounded-sm py-0 pl-8 pr-2.5 text-body outline-none max-md:min-h-11',
+        'transition-colors ease-out',
+        'data-[highlighted]:bg-hover data-[highlighted]:active:bg-[var(--pressed)]',
+        ITEM_FOCUS,
+        'data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
         '[&_svg]:size-4 [&_svg]:shrink-0',
         className,
       )}
@@ -113,10 +120,11 @@ export function DropdownMenuRadioItem({
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
-        'relative flex h-8 cursor-default select-none items-center gap-2 rounded-sm py-0 pl-8 pr-2 text-body outline-none',
-        'transition-colors duration-100 ease-out',
-        'data-[highlighted]:bg-muted',
-        'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex h-[34px] cursor-default select-none items-center gap-[11px] rounded-sm py-0 pl-8 pr-2.5 text-body outline-none max-md:min-h-11',
+        'transition-colors ease-out',
+        'data-[highlighted]:bg-hover data-[highlighted]:active:bg-[var(--pressed)]',
+        ITEM_FOCUS,
+        'data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
         className,
       )}
       {...props}
@@ -145,7 +153,7 @@ export function DropdownMenuLabel({
   return (
     <DropdownMenuPrimitive.Label
       className={cn(
-        'px-2 py-1.5 text-caption font-medium text-muted-foreground',
+        'px-2.5 pt-2 pb-1 text-overline font-bold text-muted-foreground',
         inset && 'pl-8',
         className,
       )}
@@ -160,7 +168,7 @@ export function DropdownMenuSeparator({
 }: ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
   return (
     <DropdownMenuPrimitive.Separator
-      className={cn('-mx-1 my-1 h-px bg-border', className)}
+      className={cn('mx-1 my-1.5 h-px bg-line', className)}
       {...props}
     />
   )
@@ -192,10 +200,11 @@ export function DropdownMenuSubTrigger({
   return (
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
-        'flex h-8 cursor-default select-none items-center gap-2 rounded-sm px-2 text-body outline-none',
-        'transition-colors duration-100 ease-out',
-        'data-[highlighted]:bg-muted data-[state=open]:bg-muted',
-        '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',
+        'flex h-[34px] cursor-default select-none items-center gap-[11px] rounded-sm px-2.5 text-body outline-none max-md:min-h-11',
+        'transition-colors ease-out',
+        'data-[highlighted]:bg-hover data-[state=open]:bg-hover',
+        ITEM_FOCUS,
+        '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-2 data-[highlighted]:[&_svg]:text-text',
         inset && 'pl-8',
         className,
       )}
@@ -216,8 +225,8 @@ export function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       sideOffset={sideOffset}
       className={cn(
-        'z-50 min-w-44 overflow-hidden bg-elevated border border-border-strong rounded-md shadow-md p-1',
-        'transition-opacity duration-150 ease-out',
+        'z-50 min-w-44 overflow-hidden rounded-card border-0 bg-raised p-1.5 shadow-[var(--shadow-pop),inset_0_0_0_1px_var(--line)]',
+        'transition-opacity duration-[var(--duration-panel)] ease-out',
         'data-[state=open]:opacity-100 data-[state=closed]:opacity-0',
         className,
       )}

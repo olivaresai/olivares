@@ -257,6 +257,11 @@ const NO_SON_DE_INQUILINO: Record<string, string> = {
   'reporting.reports':
     '`handleListReports(w, _ *http.Request, _ api.ModuleContext)` — catálogo estático en código, ' +
     'ignora petición y contexto (modules/reporting/api.go)',
+  'providers.presets':
+    '`handleListProviderPresets(w, _ *http.Request, _ api.ModuleContext)` ignores request and ' +
+    'context and returns `modelprovider.Presets()`, a clone of the closed vendor table compiled ' +
+    'into the binary (modules/sessions/provider_record_api.go:126, ' +
+    'connectors/modelprovider/presets.go:88): the same rows for every tenant',
   'governance.emergingStandards':
     '`handleEmergingStandards(w, _, _)` — mismo patrón, registro «design-toward» en código ' +
     '(modules/governance/emerging.go)',

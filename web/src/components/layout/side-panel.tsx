@@ -9,6 +9,7 @@
 // the content in the panel, through a portal, so the page's state stays the page's.
 //
 // A page that declares nothing gets no panel and no toggle: the work keeps the width.
+import { usePreferencesStore } from '@/stores/preferences'
 import { PanelRight, X } from 'lucide-react'
 import {
   createContext,
@@ -63,12 +64,15 @@ function startsOpen(): boolean {
 
 export function SidePanelProvider({ children }: { children: ReactNode }) {
   const [title, declare] = useState<string | null>(null)
-  const [open, setOpen] = useState(startsOpen)
+  const choice = usePreferencesStore((s) => s.panelOpen)
+  const saveChoice = usePreferencesStore((s) => s.setPanelOpen)
+  const open = choice ?? startsOpen()
+  const setOpen = saveChoice
   const [host, setHost] = useState<HTMLElement | null>(null)
   const panelId = useId()
   const value = useMemo(
     () => ({ title, open, host, panelId, declare, setOpen, setHost }),
-    [title, open, host, panelId],
+    [title, open, host, panelId, setOpen],
   )
   return (
     <SidePanelContext.Provider value={value}>
@@ -162,7 +166,7 @@ export function SidePanelHost() {
             type="button"
             onClick={close}
             aria-label={t('shell.panel.close')}
-            className="grid size-8 place-items-center rounded-ctl text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+            className="grid size-8 place-items-center rounded-ctl text-text-2 hover:bg-hover hover:text-text"
           >
             <X aria-hidden className="size-4" />
           </button>
@@ -192,9 +196,13 @@ export function SidePanelToggle() {
       aria-controls={panel.open ? panel.panelId : undefined}
       aria-label={toggleName}
       title={toggleName}
-      className="grid size-8 shrink-0 place-items-center rounded-ctl text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus aria-pressed:bg-active aria-pressed:text-text"
+      className="grid size-8 shrink-0 place-items-center rounded-ctl text-text-2 hover:bg-hover hover:text-text aria-pressed:bg-active aria-pressed:text-text max-[760px]:size-11"
     >
       <PanelRight aria-hidden className="size-4" />
     </button>
   )
+}
+
+export function useSidePanel() {
+  return useContext(SidePanelContext)
 }

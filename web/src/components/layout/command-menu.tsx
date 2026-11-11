@@ -218,8 +218,9 @@ function PaletteBody() {
   const setOpen = useCommandStore((s) => s.setOpen)
   // Ask is the models module's: its view is not read while that module is off.
   const modelsOn = useModuleOn('models')
+  const { activeTenant, can, logout, isSuperadmin } = useAuth()
   const askView = useQuery({
-    queryKey: askQueryKeys.view,
+    queryKey: askQueryKeys.view(activeTenant),
     queryFn: ({ signal }) => askApi.view(signal),
     enabled: modelsOn,
   })
@@ -236,7 +237,6 @@ function PaletteBody() {
         '[data-testid="work-rail"] [aria-selected="true"][data-address]',
       )
       ?.getAttribute('data-address')
-  const { activeTenant, can, logout, isSuperadmin } = useAuth()
   const { navigable, listed } = useViewAccess()
   // The verbs' own authority, which is NOT the view's (see features/navigation/command-actions).
   const { authorized: mayRun, capture } = useCommandActionAuthority()
@@ -727,9 +727,16 @@ function PaletteBody() {
                 }}
               >
                 <Play />
-                <span>{importSessionLabel}</span>
-                <span className="text-caption text-muted-foreground">
-                  Claude Code
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate" data-slot="palette-name">
+                    {markMatch(importSessionLabel, matchQuery)}
+                  </span>
+                  <span
+                    className="truncate text-caption leading-4 text-muted-foreground"
+                    data-slot="palette-context"
+                  >
+                    Claude Code
+                  </span>
                 </span>
               </CommandItem>
             ) : null}
@@ -807,7 +814,7 @@ function PaletteBody() {
                 }}
               >
                 <Columns2 aria-hidden="true" />
-                <span className="truncate">
+                <span className="min-w-0 flex-1 truncate">
                   {openBesideLabel} · {row.title ?? row.reference}
                 </span>
               </CommandItem>
@@ -987,7 +994,7 @@ function PaletteBody() {
       ) : null}
       <div
         data-slot="palette-footer"
-        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-2 text-caption text-muted-foreground"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line bg-frame/30 px-[18px] py-2.5 text-caption text-muted-foreground"
       >
         <span className="inline-flex items-center gap-1">
           <Kbd>↑</Kbd>

@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 # Exercise the checker's own classifiers without running its repository census.
@@ -28,6 +29,20 @@ os.chdir(_before)
 
 
 class ReleaseGeneration(unittest.TestCase):
+    def test_pin_census_does_not_tokenize_files_without_pin_prefixes_or_marks(self):
+        text = 'package example\n// dependency version 2.3.4\n' * 100
+        with mock.patch.dict(CHECKER, tokens=mock.Mock(wraps=CHECKER['tokens'])):
+            self.assertEqual(CHECKER['file_hits']('example.go', text, None, CHECKER['is_pin']), [])
+            CHECKER['tokens'].assert_not_called()
+        for prefix in ('olivaresai/olivares:', 'olivares/olivares:', 'olivares-', 'olivares_'):
+            hits = CHECKER['file_hits']('example.go', prefix + '1.2', None, CHECKER['is_pin'])
+            self.assertEqual([hit.token for hit in hits], ['1.2'])
+        marked = '# release\nversion=1.2\n# /release\n'
+        self.assertEqual([hit.token for hit in CHECKER['file_hits'](
+            'example.sh', marked, None, CHECKER['is_pin'])], ['1.2'])
+        with self.assertRaises(SystemExit):
+            CHECKER['file_hits']('example.sh', '# release\n', None, CHECKER['is_pin'])
+
     def test_published_openapi_descriptions_use_current_release_vocabulary(self):
         def descriptions(value):
             if isinstance(value, dict):

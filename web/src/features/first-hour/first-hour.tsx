@@ -82,6 +82,7 @@ import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import { useTenantStore } from '@/stores/tenant'
 import { cn } from '@/lib/utils'
 import { BringFoldersStep } from './bring-folders'
+import { registeredFoldersQuery } from './folders-query'
 import {
   useNewSessionDialog,
   type AdvancedLaunch,
@@ -134,6 +135,11 @@ import {
   ModelPill,
   ToolPill,
 } from './start-pills'
+import {
+  WorktreeChoice,
+  WorktreePill,
+  type StartWorktree,
+} from './start-worktree'
 import './i18n'
 import {
   useClientSettings,
@@ -257,10 +263,14 @@ function StatusLine({ ok, children }: { ok: boolean; children: ReactNode }) {
 export function ToolCard({
   driver,
   part = 'all',
+  primary = false,
 }: {
   /** Grok Build is installed from AI tools' own review, so it shows `part="signIn"`. */
   driver: SignInTool
   part?: 'all' | 'install' | 'signIn'
+  /** This card's action is the screen's one next step (WorkStart): the filled button.
+   * Cards listed side by side keep it secondary. */
+  primary?: boolean
 }) {
   const { t } = useTranslation('firstHour')
   const qc = useQueryClient()
@@ -355,7 +365,7 @@ export function ToolCard({
               one orange control per first screen is the rule. The
               wizard's one next step — Start — keeps the orange. */}
           <Button
-            variant="secondary"
+            variant={primary ? 'primary' : 'secondary'}
             className="self-start"
             onClick={() => install.mutate()}
             disabled={install.isPending}
@@ -381,7 +391,7 @@ export function ToolCard({
         </div>
       ) : null}
       {installed && !ready && part !== 'install' ? (
-        <SignIn driver={driver} variant="secondary" />
+        <SignIn driver={driver} variant={primary ? 'primary' : 'secondary'} />
       ) : null}
     </div>
   )
@@ -854,10 +864,6 @@ function FolderLabel({
  * the New session form for the last folder. */
 const STARTED_WINDOW = 20
 
-/** How many registered folders, newest first, the New session form matches the last
- * folder against; one beyond them gives a new folder instead. */
-const FOLDER_WINDOW = 200
-
 /** How many folders, newest first, the composer's folder pill lists before Another folder…. */
 const RECENT_FOLDERS = 8
 
@@ -873,6 +879,7 @@ export function StartSessionForm({
   initialDraft,
   composer = false,
   toolChoice,
+  toolStep = false,
 }: {
   initialDraft?: SessionDraft
   onStarted?: () => void
@@ -883,6 +890,9 @@ export function StartSessionForm({
   composer?: boolean
   /** The tool the person picked, held by a parent that shows something for it. */
   toolChoice?: ToolChoice
+  /** The parent shows the step that gets the picked tool ready, so the form does not
+   * say it a second time. */
+  toolStep?: boolean
 }) {
   const { t } = useTranslation('firstHour')
   const formId = useId()
@@ -932,6 +942,7 @@ export function StartSessionForm({
         composer={composer}
         field={field}
         toolChoice={toolChoice}
+        toolStep={toolStep}
       />
     </div>
   )
@@ -952,6 +963,7 @@ function StartSessionChoices({
   composer,
   field,
   toolChoice,
+  toolStep,
 }: {
   initialDraft?: SessionDraft
   formId: string
@@ -961,6 +973,7 @@ function StartSessionChoices({
   composer: boolean
   field: RefObject<HTMLTextAreaElement | null>
   toolChoice?: ToolChoice
+  toolStep?: boolean
 }) {
   const { t } = useTranslation('firstHour')
   const navigate = useNavigate()
@@ -1024,20 +1037,7 @@ function StartSessionChoices({
     enabled: !!boundary.tenant,
     staleTime: 0,
   })
-  const registered = useQuery({
-    queryKey: [
-      ...agentOpsKeys.boundaryScope(boundary.tenant, epoch),
-      'workspaces',
-      { state: 'active', limit: FOLDER_WINDOW },
-    ],
-    queryFn: ({ signal }) =>
-      agentOpsApi.listWorkspaces(
-        { state: 'active', limit: FOLDER_WINDOW },
-        { tenant: boundary.tenant, signal },
-      ),
-    enabled: !!boundary.tenant,
-    staleTime: 0,
-  })
+  const registered = useQuery(registeredFoldersQuery(boundary.tenant, epoch))
   // A sole named account still supplies its reference. Readiness belongs to the
   // selected profile; the default login cannot qualify another home.
   const profiles = useSessionProfiles(
@@ -1118,6 +1118,11 @@ function StartSessionChoices({
     !!current && !current.workspace_ref && !folder.trim() && !current.selected
   // The folders sessions already use, to pick from; a path is typed only as the fallback.
   const [runOn, setRunOn] = useState('')
+  // The folder's current checkout, or a worktree of the session's own (needs a registered folder).
+  const [worktree, setWorktree] = useState<StartWorktree>({
+    on: false,
+    from: '',
+  })
   const [more, setMore] = useState(false)
   // The person's own pick; until there is one, the permission the folder stores, else the
   // usual default. A stored Full is offered only to someone who may run it: the engine
@@ -1270,6 +1275,12 @@ function StartSessionChoices({
   // An unknown driver still needs a connection test when it has no model choices.
   const untested = noDefault && keyModels.length === 0
   const canReadProviders = can('sessions:provider:read')
+  // A new typed path is registered by the engine (POST workspaces asks
+  // sessions:workspace:admin); without it a typed path reaches only a folder
+  // already registered, and the hint says so. The AI tools place opens on
+  // sessions:account:read; without it the note says who readies a tool.
+  const mayRegisterFolders = can('sessions:workspace:admin')
+  const canOpenTools = can('sessions:account:read')
   const openProviders = () => {
     onStarted?.()
     navigate({ to: '/providers' as '/' })
@@ -1309,6 +1320,12 @@ function StartSessionChoices({
             secretEnv,
             ...(credentials.length ? { credentials } : {}),
             ...(runOn ? { runOn } : {}),
+            ...(worktree.on && current?.workspace_ref
+              ? {
+                  worktree: true,
+                  ...(worktree.from ? { worktreeFrom: worktree.from } : {}),
+                }
+              : {}),
             ...(model ? { model } : {}),
             ...(effort ? { effort } : {}),
             ...(speed?.fastMode !== undefined
@@ -1425,7 +1442,7 @@ function StartSessionChoices({
     </p>
   ) : null
   const notReadyNote =
-    tool && !toolReady ? (
+    tool && !toolReady && !toolStep ? (
       <p
         id={notReadyId}
         className="text-caption text-text-2"
@@ -1436,16 +1453,20 @@ function StartSessionChoices({
           ? `${selectedProfile.label} · ${t(selectedProfile.missing === 'key' ? 'start.profileNeedsKey' : 'start.profileNotSignedIn')}`
           : (refusal(tool) ??
             t('start.notReady', { tool: toolName(tool) }))}{' '}
-        <Button
-          type="button"
-          variant="link"
-          onClick={() => {
-            onStarted?.()
-            navigate({ to: '/agent-tools' as '/' })
-          }}
-        >
-          {t('start.openTools')}
-        </Button>
+        {canOpenTools ? (
+          <Button
+            type="button"
+            variant="link"
+            onClick={() => {
+              onStarted?.()
+              navigate({ to: '/agent-tools' as '/' })
+            }}
+          >
+            {t('start.openTools')}
+          </Button>
+        ) : (
+          t('start.askAdmin')
+        )}
       </p>
     ) : null
   const typedFolderField = current?.typing ? (
@@ -1470,7 +1491,9 @@ function StartSessionChoices({
           // folders is not told of a list they were never to see.
           registered.isError && can('sessions:workspace:read')
             ? t('start.foldersUnreadable')
-            : t('start.folderHint')
+            : mayRegisterFolders
+              ? t('start.folderHint')
+              : t('start.folderHintGiven')
         }
       </p>
     </>
@@ -1665,6 +1688,9 @@ function StartSessionChoices({
           ) : (
             <Loader2 aria-hidden className="size-4 animate-spin text-text-3" />
           )}
+          {current?.workspace_ref ? (
+            <WorktreePill value={worktree} onChange={setWorktree} />
+          ) : null}
           <DisabledReason
             className="ms-auto max-w-full"
             mode="native"
@@ -1699,7 +1725,7 @@ function StartSessionChoices({
                 start.isPending ? t('start.starting') : t('start.start')
               }
               aria-describedby={
-                tool && !toolReady
+                tool && !toolReady && !toolStep
                   ? notReadyId
                   : needsKeyModel
                     ? keyModelId
@@ -1970,6 +1996,14 @@ function StartSessionChoices({
       ) : (
         <Loader2 aria-hidden className="size-4 animate-spin text-text-3" />
       )}
+      {current?.workspace_ref ? (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="text-body font-medium text-foreground">
+            {t('start.worktreeLegend')}
+          </legend>
+          <WorktreeChoice value={worktree} onChange={setWorktree} />
+        </fieldset>
+      ) : null}
       {/* The same presets for every tool (N1); a launch a tool cannot honour is refused
           by the engine with one sentence, shown below. The current one is always on
           screen, with what it does. */}
@@ -2106,7 +2140,9 @@ function StartSessionChoices({
             variant="primary"
             size="lg"
             className="w-full"
-            aria-describedby={tool && !toolReady ? notReadyId : undefined}
+            aria-describedby={
+              tool && !toolReady && !toolStep ? notReadyId : undefined
+            }
             disabled={
               !current ||
               needsFolder ||
@@ -2186,8 +2222,10 @@ function ToolCards() {
   return FIRST_HOUR_TOOLS.map((d) => <ToolCard key={d} driver={d} />)
 }
 
-/** The work surface before any session: the composer is always there, and until a tool
- * can start one, the card that gets the composer's tool ready is the one step above it. */
+/** The work surface before any session, one heading, one sentence and one action. With a
+ * tool ready the action is the composer; until then it is the card that gets the composer's
+ * tool ready (install, then sign in), and the composer waits under it. Folders the person's
+ * tools already worked in are offered once a session can start. */
 export function WorkStart() {
   const { t } = useTranslation('firstHour')
   const canStart = useCanStart()
@@ -2201,36 +2239,31 @@ export function WorkStart() {
     canStart === false
       ? FIRST_HOUR_TOOLS.find((d) => d === (toolChoice[0] ?? sessionTools()[0]))
       : undefined
+  const cardStatus = useToolStatus(cardTool ?? FIRST_HOUR_TOOLS[0], !!cardTool)
+  const sentence = !cardTool
+    ? t('steps.start.body')
+    : cardStatus.data?.installed
+      ? t('steps.signIn.body')
+      : t('steps.install.body')
   return (
     <div
       data-testid="work-start"
       className="mx-auto flex w-full max-w-[640px] flex-col gap-5 p-4 sm:p-6"
     >
-      <h2 className="text-title font-semibold text-text">
-        {t('steps.start.title')}
-      </h2>
-      {cardTool ? (
-        <section
-          className="flex flex-col gap-3"
-          aria-labelledby="work-start-tools"
-        >
-          <div>
-            <h3
-              id="work-start-tools"
-              className="text-body-l font-semibold text-text"
-            >
-              {t('steps.signIn.title')}
-            </h3>
-            <p className="text-body text-text-2">{t('steps.signIn.body')}</p>
-          </div>
-          <ToolCard driver={cardTool} />
-        </section>
-      ) : null}
+      <div>
+        <h2 className="text-title font-semibold text-text">
+          {t('steps.start.title')}
+        </h2>
+        <p className="text-body text-text-2">{sentence}</p>
+      </div>
+      {cardTool ? <ToolCard driver={cardTool} primary /> : null}
+      {canStart ? <BringFoldersStep quiet /> : null}
       <StartSessionForm
         composer
         onAdvanced={openAdvanced}
         onStarted={stopComposing}
         toolChoice={toolChoice}
+        toolStep={!!cardTool}
       />
     </div>
   )
@@ -2388,13 +2421,13 @@ export function FirstHourSteps() {
             {t('steps.install.orUse')}
             <AppLink
               href={keyHref('anthropic')}
-              className="text-accent-text underline underline-offset-2"
+              className="text-foreground underline underline-offset-2"
             >
               {t('steps.install.addKey')}
             </AppLink>
             <AppLink
               href={keyHref('ollama')}
-              className="text-accent-text underline underline-offset-2"
+              className="text-foreground underline underline-offset-2"
             >
               {t('steps.install.addLocal')}
             </AppLink>

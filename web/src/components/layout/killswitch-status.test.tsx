@@ -3,7 +3,8 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // The kill switch on every page: one pill in the top bar while a stop is engaged, nothing
-// otherwise, and no read for a principal who may not open the kill switch.
+// otherwise, no read for a principal who may not read the stop, and a link only for whom the
+// kill switch page opens.
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen, DEFAULT_AUTH } from '@/test/intel'
@@ -11,12 +12,12 @@ import { killswitchApi } from '@/features/killswitch/api'
 import type { KillSwitchDTO } from '@/features/killswitch/types'
 import { KillSwitchStatus } from './killswitch-status'
 
-const auth = vi.hoisted(() => ({ allowed: true }))
+const auth = vi.hoisted(() => ({ allowed: true, denied: new Set<string>() }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     ...DEFAULT_AUTH,
     activeTenant: 't-demo',
-    can: () => auth.allowed,
+    can: (p: string) => auth.allowed && !auth.denied.has(p),
   }),
 }))
 vi.mock('@tanstack/react-router', () => ({
@@ -41,6 +42,7 @@ const stop = (over: Partial<KillSwitchDTO>): KillSwitchDTO => ({
 
 afterEach(() => {
   auth.allowed = true
+  auth.denied.clear()
   vi.restoreAllMocks()
 })
 
@@ -67,12 +69,15 @@ describe('KillSwitchStatus', () => {
     })
     renderIntel(<KillSwitchStatus />)
     const pill = await screen.findByTestId('killswitch-status')
-    expect(pill).toHaveTextContent('2 agent stops active')
+    expect(pill).toHaveTextContent('2 agents stopped')
+    // A state is a mark and a word at every width, a phone included.
+    expect(screen.getByText('2 agents stopped')).not.toHaveClass(
+      'max-[760px]:sr-only',
+    )
     expect(pill.className).toContain('text-warning')
   })
 
   it('marks each stop with the kill switch banner icon, not a color dot alone', async () => {
-    // On a phone the words go to the accessible name: the icon is what is left to see.
     const state = vi.spyOn(killswitchApi, 'state').mockResolvedValue({
       estate_stopped: false,
       active: [stop({ id: 'a' })],
@@ -97,6 +102,20 @@ describe('KillSwitchStatus', () => {
     renderIntel(<KillSwitchStatus />)
     await vi.waitFor(() => expect(read).toHaveBeenCalled())
     expect(screen.queryByTestId('killswitch-status')).toBeNull()
+  })
+
+  it('states the stop to whoever reads it, and links the page only for whom it opens', async () => {
+    auth.denied.add('governance:killswitch:admin')
+    vi.spyOn(killswitchApi, 'state').mockResolvedValue({
+      estate_stopped: true,
+      active: [stop({ scope_kind: 'estate' })],
+    })
+    renderIntel(<KillSwitchStatus />)
+    const pill = await screen.findByTestId('killswitch-status')
+    expect(pill).toHaveTextContent('ALL AGENTS STOPPED')
+    expect(pill).not.toHaveAttribute('href')
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(pill.parentElement).toHaveAttribute('role', 'status')
   })
 
   it('reads nothing for a principal who may not open the kill switch', () => {

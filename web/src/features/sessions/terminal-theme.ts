@@ -31,7 +31,8 @@ export function terminalTheme(): ITheme {
     foreground,
     cursor: accent,
     cursorAccent: background,
-    selectionBackground: token('--accent-soft'),
+    // xterm draws an opaque selection at 30 %: of the orange, like the console's ::selection.
+    selectionBackground: token('--accent'),
     black: muted,
     red: danger,
     green: success,

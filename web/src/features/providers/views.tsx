@@ -31,9 +31,8 @@ export const VIEWS = [
       { permission: 'sessions:provider:admin' },
       { permission: 'sessions:profile:write' },
     ],
-    // A door into Tools, where the API keys are listed beside the accounts.
-    // `?add=<kind>&returnTo=` (the setup wizard's "Add an API key") still opens the form.
-    doorTo: 'agent-tools',
+    // The Providers tab keeps the setup wizard's published add-key address.
+    // Profiles and accounts stay under AI tools; API keys have their own tab.
     element: toolsRoom,
   },
 ] satisfies ViewEntry[]

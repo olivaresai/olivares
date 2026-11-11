@@ -13,7 +13,7 @@ and a reconstructable timeline. Where module I (inventory) materializes the dura
 estate, module II keeps a **live operational overlay** per session over the same
 observation stream — and shows only what that stream honestly carries.
 
-Olivares <!-- release -->0.9<!-- /release --> also **launches** official provider CLIs as owned children under a
+Olivares <!-- release -->0.10<!-- /release --> also **launches** official provider CLIs as owned children under a
 [provider profile](/how-to/operate-provider-sessions/). That managed path is
 the same module. It does not replace the overlay, and it does not merge two
 homes that announce the same provider session id (`CHANGELOG.md` `[26.9.0]` B1/B2).
@@ -84,12 +84,34 @@ If no executable resolves, launch is refused. Other readiness checks, including
 profile authentication and launch policy, still apply. Operator steps:
 [Operate a provider session](/how-to/operate-provider-sessions/).
 
+## Provider profile runtime
+
+A Claude Code profile can declare the token count its sessions compact at:
+`auto_compact_window` on `PATCH /v1/m/sessions/provider-profiles/{ref}`, from
+`100000` to `1000000`, or `0` to withdraw it and use Claude's own default. The
+profile and account reads show it while it is set. The launch passes it to Claude
+Code as `CLAUDE_CODE_AUTO_COMPACT_WINDOW`; it is read again on every launch, a
+session already running keeps the value it started with, and a profile of another
+tool refuses it with `422` because the tool has no such setting. The tool binary
+stays the engine's own choice (see the override variables above).
+
+The console's AI tools page switches a profile off and on (`state` `disabled` or
+`active`, the same lifecycle as the API) and keeps a switched-off profile listed.
+In its sheet each person also sets which of the tool's models the pickers offer,
+their order and models the tool does not list. That list is a per-user preference
+stored with the user's console settings; it never changes what the tool reports,
+and the tool's default or a model typed into a picker still works.
+
 ## Provider account usage
 
 `GET /v1/m/sessions/provider-accounts/{ref}` and the account list carry the
 latest `usage[]` facts reported by that account's own tool home. The CLI exposes
 the same response through `olivares provider account get <ref> -o json`.
 These readings come from structured tool responses, not session text.
+
+The same response carries `plan`, the plan that tool reports for that home, as the
+tool names it (for example `max` or `promax`). It is absent when the tool names
+none or the account is not signed in.
 
 A percentage row has `window`, `label`, `utilization` (percent used),
 `observed_at`, and `resets_at` when reported. Window names are open-ended:

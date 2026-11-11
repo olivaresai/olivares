@@ -1,9 +1,22 @@
 {
   "edition": {
     "viewPolicy": "View policy",
-    "editingRequiresBusiness": "Editing custom policies, roles and grants requires Business.",
+    "editingRequiresBusiness": "Editing custom policies, roles and grants requires Olivares AI Business.",
     "disablePolicy": "Disable policy",
-    "disablePolicyDescription": "The authored policy stops applying. Its history and other enforced policies are preserved."
+    "disablePolicyDescription": "The authored policy stops applying. Its history and other enforced policies are preserved.",
+    "note": {
+      "line": "{{capability}} is part of {{edition}}. Add a license in <0>Settings > Edition</0>, or see <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "This is part of {{edition}}. Add a license in <0>Settings > Edition</0>, or see <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} is part of {{edition}}. Ask an administrator.",
+      "lineUnnamedAsk": "This is part of {{edition}}. Ask an administrator.",
+      "readsBelow": "What is already stored stays readable and exportable.",
+      "tag": "Part of {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skills",
+      "sso": "Single sign-on",
+      "approvalTiers": "Changing an action's risk tier or approval count"
+    }
   },
   "errors": {
     "generic": "Something went wrong"
@@ -113,14 +126,6 @@
     "peopleHint": "Type a name.",
     "ask": "Ask Olivares…"
   },
-  "hintBar": {
-    "move": "move",
-    "open": "open",
-    "approve": "approve",
-    "deny": "deny",
-    "launcher": "launcher",
-    "command": "command"
-  },
   "permissionWords": {
     "read": "read access",
     "write": "write access",
@@ -218,6 +223,7 @@
   "notifications": {
     "title": "Recent activity",
     "empty": "No recent activity.",
+    "auditOnly": "Recent activity is shown to people who can read the audit ledger.",
     "viewAll": "View all in the audit ledger",
     "events": {
       "auditCheckpoint": "Audit checkpoint created",
@@ -323,7 +329,8 @@
       "launcher": {
         "focus": "Go to the launcher",
         "start": "Start the session",
-        "startBackground": "Start it and stay here"
+        "startBackground": "Start it and stay here",
+        "stash": "Set the draft aside, or bring it back"
       },
       "surface": {
         "openBeside": "Open beside",
@@ -372,7 +379,9 @@
       },
       "ask": {
         "open": "Ask Olivares"
-      }
+      },
+      "shell.sidebar": "Toggle sidebar",
+      "shell.panel": "Toggle side panel"
     },
     "when": {
       "railFocused": "in the session rail",

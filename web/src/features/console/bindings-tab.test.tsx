@@ -6,6 +6,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ADMIN_READS } from '@/features/navigation/admin-reads.fixture'
 import './i18n'
 
 const { api, authState, navigate } = vi.hoisted(() => ({
@@ -124,6 +125,26 @@ describe('BindingsTab', () => {
     })
   })
 
+  it('opens the access map from the preview for an administrator', async () => {
+    const user = userEvent.setup()
+    await chooseSource(user)
+    await user.click(screen.getByRole('button', { name: 'Open in Access Map' }))
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/access-map',
+      search: { focus: 'kb-prod' },
+    })
+  })
+
+  it('offers an editor no access map from the preview: its read is for administrators', async () => {
+    authState.can = (p) => !ADMIN_READS.has(p)
+    const user = userEvent.setup()
+    await chooseSource(user)
+    expect(screen.getByText('Resolution preview')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Open in Access Map' }),
+    ).toBeNull()
+  })
+
   it('renders a load error with retry', async () => {
     api.listBindings.mockRejectedValue(new Error('boom'))
     const user = userEvent.setup()
@@ -175,6 +196,34 @@ describe('BindingsTab', () => {
         }),
       ),
     )
+  })
+
+  it('says which effect is chosen with aria-pressed and the selection look, never by red ink alone', async () => {
+    const user = userEvent.setup()
+    await chooseSource(user)
+    await user.click(screen.getByRole('button', { name: /new binding/i }))
+    const dialog = await screen.findByRole('dialog')
+    const allow = within(dialog).getByRole('button', { name: /^allow$/i })
+    const forbid = within(dialog).getByRole('button', { name: /^forbid$/i })
+    expect(allow).toHaveAttribute('aria-pressed', 'true')
+    expect(forbid).toHaveAttribute('aria-pressed', 'false')
+    // Every effect says «chosen» the same way: the chosen Allow is the pressed flat button too,
+    // never a second filled accent button beside the dialog's own action.
+    expect(allow).toHaveClass(
+      'aria-pressed:bg-active',
+      'aria-pressed:font-bold',
+    )
+    expect(allow).not.toHaveClass('bg-accent')
+
+    await user.click(forbid)
+    expect(forbid).toHaveAttribute('aria-pressed', 'true')
+    expect(allow).toHaveAttribute('aria-pressed', 'false')
+    // The chosen Forbid is the pressed flat button: the selection fill and a bold label.
+    expect(forbid).toHaveClass(
+      'aria-pressed:bg-active',
+      'aria-pressed:font-bold',
+    )
+    expect(forbid).not.toHaveClass('text-bad')
   })
 
   it('offers Require, a mandatory template, only for a template', async () => {

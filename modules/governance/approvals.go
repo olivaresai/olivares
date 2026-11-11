@@ -26,8 +26,8 @@ import (
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
-// Approval lifecycle states. pending is the only non-terminal state; the other
-// four are terminal (no transition leaves them).
+// Approval lifecycle states. Only a session allowance can move from approved
+// to canceled, when its requester or an administrator revokes it.
 const (
 	statusPending  = "pending"
 	statusApproved = "approved"
@@ -56,8 +56,9 @@ const maxDecisionRetries = 6
 // lower their own approval bar; only when no policy matches do the request's own
 // values (or the default of one approval) apply.
 type createApprovalRequest struct {
-	// Set only by the engine for a provider method that can grant session scope.
+	// Set only by the engine for a reviewable session tool request.
 	SessionScopeAllowed bool            `json:"-"`
+	SessionAllowanceKey string          `json:"-"`
 	SessionRef          string          `json:"session_ref,omitempty"`
 	SubjectKind         string          `json:"subject_kind"`
 	SubjectRef          string          `json:"subject_ref"`
@@ -274,7 +275,7 @@ func (m *Module) handleCreateApproval(w http.ResponseWriter, r *http.Request, mc
 // IS operator-tunable per the two-human quorum of a re-enable is not).
 // The caller emits approval.requested AFTER its transaction commits.
 func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, actorKind, userID string, in createApprovalRequest, minRequired int64, now model.Timestamp, capacity ...int64) (approvalDTO, error) {
-	if in.SessionScopeAllowed && (in.Action != "sessions.provider.approval" || in.SubjectKind != "session_run" || in.SessionRef == "") {
+	if in.SessionScopeAllowed && (in.SessionRef == "" || !(in.Action == "sessions.provider.approval" && in.SubjectKind == "session_run" || in.Action == "claude.tool.use" && in.SubjectKind == "claude.tool")) {
 		return approvalDTO{}, errors.New("session scope requires a provider permission request bound to a session")
 	}
 	// A matching approval policy selects threshold + windows; session launches
@@ -330,13 +331,13 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 		rec[colChangeClass], rec[colChangePaths] = in.ChangeClass, string(encoded)
 	}
 	if in.Review != nil {
-		encoded, err := json.Marshal(in.Review)
+		encoded, err := json.Marshal(approvalReviewRecord{ApprovalReview: *in.Review, SessionAllowanceKey: in.SessionAllowanceKey})
 		if err != nil {
 			return approvalDTO{}, err
 		}
 		rec[colApprovalReview] = string(encoded)
 	}
-	if in.SessionScopeAllowed {
+	if in.SessionScopeAllowed && !matched {
 		rec[colSessionScopeAllowed] = true
 	}
 	if expiresIn > 0 {
@@ -961,9 +962,8 @@ func (m *Module) handleCancel(w http.ResponseWriter, r *http.Request, mc api.Mod
 	writeJSON(w, http.StatusOK, out)
 }
 
-// cancelApproval is the shared REST and in-process pending-only transition.
-// A terminal request returns its unchanged verdict and a conflict, without an
-// audit of a cancellation or a second resolution event.
+// cancelApproval withdraws a pending request or revokes an approved session allowance.
+// Other terminal decisions remain immutable.
 func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.ModuleContext, id model.ID) (Approval, error) {
 	if id.IsZero() {
 		return Approval{}, approvalDecisionError{Status: http.StatusBadRequest, Message: "invalid id"}
@@ -990,7 +990,14 @@ func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.M
 			return err
 		}
 		out = toApprovalDTO(rec, now, liveRiskTier(pols, rec))
-		if out.Status != statusPending {
+		sessionGrant := false
+		if out.Status == statusApproved && rec.Bool(colSessionScopeAllowed) {
+			sessionGrant, err = sessionDecisionsAllow(ctx, sc, id)
+			if err != nil {
+				return err
+			}
+		}
+		if out.Status != statusPending && !sessionGrant {
 			return approvalDecisionError{Status: http.StatusConflict, Message: "approval is " + out.Status + "; it cannot be canceled"}
 		}
 		rec[colStatus] = statusCanceled
@@ -1004,9 +1011,13 @@ func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.M
 		if mc.Principal.SessionIdentity != "" {
 			actor, kind = "session:"+mc.Principal.SessionIdentity, model.ActorAgent
 		}
+		var meta map[string]any
+		if sessionGrant {
+			meta = map[string]any{"scope": "session"}
+		}
 		_, err = sc.Audit().Append(ctx, model.AuditDraft{
 			Actor: actor, ActorKind: kind, Action: "governance.approval.cancel",
-			TargetKind: approvalKind, TargetID: id,
+			TargetKind: approvalKind, TargetID: id, Meta: meta,
 		})
 		return err
 	})
